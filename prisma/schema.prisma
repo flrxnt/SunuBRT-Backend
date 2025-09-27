@@ -1,9 +1,196 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  DRIVER
+  ADMIN
+}
+
+enum TicketStatus {
+  PENDING
+  PAID
+  USED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  email       String    @unique
+  password    String
+  firstName   String
+  lastName    String
+  phone       String?   @unique
+  role        Role      @default(USER)
+  isVerified  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  driverBus   Bus?      @relation("DriverToBus")
+  tickets     Ticket[]
+  payments    Payment[]
+
+  @@map("users")
+}
+
+model Bus {
+  id               Int        @id @default(autoincrement())
+  licensePlate     String     @unique
+  capacity         Int
+  model            String?
+  year             Int?
+  driverId         Int        @unique
+  isActive         Boolean    @default(true)
+  passengersCount  Int        @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Relations
+  driver           User       @relation("DriverToBus", fields: [driverId], references: [id])
+  currentPosition  Position?
+  trips            Trip[]
+
+  @@map("buses")
+}
+
+model Position {
+  id        Int      @id @default(autoincrement())
+  busId     Int      @unique
+  latitude  Float
+  longitude Float
+  altitude  Float?
+  speed     Float?
+  heading   Float?
+  timestamp DateTime @default(now())
+
+  // Relations
+  bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+  @@map("positions")
+}
+
+model Route {
+  id            Int      @id @default(autoincrement())
+  name          String
+  startPoint    String
+  endPoint      String
+  distance      Float?
+  duration      Int?     // en minutes
+  description   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+
+  // Relations
+
+  trips         Trip[]
+
+  points        RoutePoint[]
+
+
+  @@map("routes")
+
+}
+
+
+
+model RoutePoint {
+  id        Int      @id @default(autoincrement())
+  routeId   Int
+  latitude  Float
+  longitude Float
+  elevation Float?
+  seq       Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, seq])
+  @@map("route_points")
+}
+
+model Trip {
+
+  id            Int        @id @default(autoincrement())
+  routeId       Int
+  busId         Int?
+  startTime     DateTime
+  endTime       DateTime?
+  price         Float
+  availableSeats Int
+  status        TripStatus @default(SCHEDULED)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relations
+  route         Route      @relation(fields: [routeId], references: [id])
+  bus           Bus?       @relation(fields: [busId], references: [id])
+  tickets       Ticket[]
+
+  @@map("trips")
+}
+
+model Ticket {
+  id            Int          @id @default(autoincrement())
+  userId        Int
+  tripId        Int
+  seatNumber    String?
+  qrCode        String       @unique
+  status        TicketStatus @default(PENDING)
+  purchaseDate  DateTime     @default(now())
+  validUntil    DateTime?
+  usedAt        DateTime?
+
+  // Relations
+  user          User         @relation(fields: [userId], references: [id])
+  trip          Trip         @relation(fields: [tripId], references: [id])
+  payment       Payment?
+
+  @@map("tickets")
+}
+
+model Payment {
+  id                Int           @id @default(autoincrement())
+  ticketId          Int           @unique
+  userId            Int
+  amount            Float
+  currency          String        @default("FCFA")
+  paydunyaToken     String?       @unique
+  paydunyaReference String?
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  ticket            Ticket        @relation(fields: [ticketId], references: [id])
+  user              User          @relation(fields: [userId], references: [id])
+
+  @@map("payments")
 }
