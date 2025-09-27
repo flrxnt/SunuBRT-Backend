@@ -7,16 +7,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable Swagger
-  const config = new DocumentBuilder()
-    .setTitle('SunuBRT Backend')
-    .setDescription('The SunuBRT Backend API description')
-    .setVersion('1.0')
-    .addTag('sunubrt')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
-
   // Enable CORS
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -50,6 +40,18 @@ async function bootstrap() {
 
   // Global prefix for all routes
   app.setGlobalPrefix('api/v1');
+
+  // Enable Swagger
+  if (process.env.NODE_ENV === 'development') {
+    const config = new DocumentBuilder()
+      .setTitle('SunuBRT Backend')
+      .setDescription('The SunuBRT Backend API description')
+      .setVersion('1.0')
+      .addTag('sunubrt')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api', app, document);
+  }
 
   // Get port from environment or use default
   const port = process.env.PORT || 3000;
