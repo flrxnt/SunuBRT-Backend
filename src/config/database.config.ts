@@ -1,7 +1,10 @@
 import { PrismaClientOptions } from '@prisma/client/runtime/library';
 
 export const databaseConfig: PrismaClientOptions = {
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log:
+    process.env.NODE_ENV === 'development'
+      ? ['query', 'info', 'warn', 'error']
+      : ['error'],
   errorFormat: 'pretty',
   datasources: {
     db: {
@@ -20,7 +23,9 @@ export const getDatabaseUrl = (): string => {
   return databaseUrl;
 };
 
-export const validateDatabaseConnection = async (prisma: any): Promise<boolean> => {
+export const validateDatabaseConnection = async (
+  prisma: any,
+): Promise<boolean> => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     return true;
