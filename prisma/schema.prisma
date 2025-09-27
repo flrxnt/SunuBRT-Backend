@@ -55,20 +55,40 @@ model User {
   @@map("users")
 }
 
+model Line {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // ex: "Ligne 1", "Ligne A"
+  number      String   @unique // ex: "1", "A", "BRT1"
+  color       String?  // couleur de la ligne pour l'affichage
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  buses       Bus[]
+  routes      Route[]
+
+  @@map("lines")
+}
+
 model Bus {
   id               String        @id @default(cuid())
-  licensePlate     String     @unique
+  busNumber        String        @unique // numéro du bus (ex: "001", "A12")
+  licensePlate     String        @unique
   capacity         Int
   model            String?
   year             Int?
+  lineId           Int?          // ligne à laquelle le bus est assigné
   driverId         String        @unique
-  isActive         Boolean    @default(true)
-  passengersCount  Int        @default(0)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  isActive         Boolean       @default(true)
+  passengersCount  Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   // Relations
-  driver           User       @relation("DriverToBus", fields: [driverId], references: [id])
+  line             Line?         @relation(fields: [lineId], references: [id])
+  driver           User          @relation("DriverToBus", fields: [driverId], references: [id])
   currentPosition  Position?
   trips            Trip[]
 
@@ -94,6 +114,7 @@ model Position {
 model Route {
   id            Int      @id @default(autoincrement())
   name          String
+  lineId        Int?     // route appartient à une ligne
   startPointId  Int?
   endPointId    Int?
   distance      Float?   // calculé automatiquement en km
@@ -104,6 +125,7 @@ model Route {
   updatedAt     DateTime @updatedAt
 
   // Relations
+  line          Line?       @relation(fields: [lineId], references: [id])
   startPoint    RoutePoint? @relation("RouteStartPoint", fields: [startPointId], references: [id])
   endPoint      RoutePoint? @relation("RouteEndPoint", fields: [endPointId], references: [id])
   trips         Trip[]
