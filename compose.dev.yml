@@ -3,9 +3,9 @@ services:
     image: postgres:18
     container_name: sunubrt-postgres
     environment:
-      POSTGRES_DB: sunubrt_db
-      POSTGRES_USER: sunubrt_user
-      POSTGRES_PASSWORD: sunubrt_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - '5432:5432'
     volumes:
@@ -30,11 +30,11 @@ services:
       - '3000:3000'
       - '9229:9229'
     environment:
-      DATABASE_URL: postgresql://sunubrt_user:sunubrt_password@postgres:5432/sunubrt_db
-      JWT_SECRET: your-super-secret-jwt-key
-      PAYDUNYA_MASTER_KEY: your-paydunya-master-key
-      PAYDUNYA_PRIVATE_KEY: your-paydunya-private-key
-      PAYDUNYA_TOKEN: your-paydunya-token
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      PAYDUNYA_MASTER_KEY: ${PAYDUNYA_MASTER_KEY}
+      PAYDUNYA_PRIVATE_KEY: ${PAYDUNYA_PRIVATE_KEY}
+      PAYDUNYA_TOKEN: ${PAYDUNYA_TOKEN}
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: 'true'
       TSC_WATCHFILE: UsePolling
