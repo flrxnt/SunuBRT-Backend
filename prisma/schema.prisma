@@ -94,25 +94,22 @@ model Position {
 model Route {
   id            Int      @id @default(autoincrement())
   name          String
-  startPoint    String
-  endPoint      String
-  distance      Float?
-  duration      Int?     // en minutes
+  startPointId  Int?
+  endPointId    Int?
+  distance      Float?   // calculé automatiquement en km
+  duration      Int?     // calculé automatiquement en minutes
   description   String?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-
   // Relations
-
+  startPoint    RoutePoint? @relation("RouteStartPoint", fields: [startPointId], references: [id])
+  endPoint      RoutePoint? @relation("RouteEndPoint", fields: [endPointId], references: [id])
   trips         Trip[]
-
-  points        RoutePoint[]
-
+  points        RoutePoint[] @relation("RoutePoints")
 
   @@map("routes")
-
 }
 
 model RoutePoint {
@@ -121,12 +118,15 @@ model RoutePoint {
   latitude  Float
   longitude Float
   elevation Float?
-  seq       Int
+  seq       Int      // ordre du point dans la route (commence à 1)
+  name      String?  // nom optionnel du point (ex: "Arrêt Central")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  route     Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  route         Route  @relation("RoutePoints", fields: [routeId], references: [id], onDelete: Cascade)
+  routeAsStart  Route[] @relation("RouteStartPoint")
+  routeAsEnd    Route[] @relation("RouteEndPoint")
 
   @@unique([routeId, seq])
   @@map("route_points")

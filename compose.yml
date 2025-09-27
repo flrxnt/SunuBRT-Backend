@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: sunubrt-postgres
+    environment:
+      POSTGRES_DB: sunubrt_db
+      POSTGRES_USER: sunubrt_user
+      POSTGRES_PASSWORD: sunubrt_password
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sunubrt-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sunubrt-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - sunubrt-network
+
+  app:
+    build: .
+    container_name: sunubrt-app
+    ports:
+      - '3000:3000'
+    environment:
+      - DATABASE_URL=postgresql://sunubrt_user:sunubrt_password@postgres:5432/sunubrt_db
+      - JWT_SECRET=your-super-secret-jwt-key
+      - PAYDUNYA_MASTER_KEY=your-paydunya-master-key
+      - PAYDUNYA_PRIVATE_KEY=your-paydunya-private-key
+      - PAYDUNYA_TOKEN=your-paydunya-token
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - sunubrt-network
+
+volumes:
+  postgres_data:
+
+networks:
+  sunubrt-network:
+    driver: bridge
