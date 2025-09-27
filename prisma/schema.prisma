@@ -36,7 +36,7 @@ enum TripStatus {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
+  id          String    @id @default(uuid())
   email       String    @unique
   password    String
   firstName   String
@@ -56,12 +56,12 @@ model User {
 }
 
 model Bus {
-  id               Int        @id @default(autoincrement())
+  id               String        @id @default(cuid())
   licensePlate     String     @unique
   capacity         Int
   model            String?
   year             Int?
-  driverId         Int        @unique
+  driverId         String        @unique
   isActive         Boolean    @default(true)
   passengersCount  Int        @default(0)
   createdAt        DateTime   @default(now())
@@ -77,7 +77,7 @@ model Bus {
 
 model Position {
   id        Int      @id @default(autoincrement())
-  busId     Int      @unique
+  busId     String      @unique
   latitude  Float
   longitude Float
   altitude  Float?
@@ -115,8 +115,6 @@ model Route {
 
 }
 
-
-
 model RoutePoint {
   id        Int      @id @default(autoincrement())
   routeId   Int
@@ -138,7 +136,7 @@ model Trip {
 
   id            Int        @id @default(autoincrement())
   routeId       Int
-  busId         Int?
+  busId         String
   startTime     DateTime
   endTime       DateTime?
   price         Float
@@ -149,7 +147,7 @@ model Trip {
 
   // Relations
   route         Route      @relation(fields: [routeId], references: [id])
-  bus           Bus?       @relation(fields: [busId], references: [id])
+  bus           Bus        @relation(fields: [busId], references: [id])
   tickets       Ticket[]
 
   @@map("trips")
@@ -157,7 +155,7 @@ model Trip {
 
 model Ticket {
   id            Int          @id @default(autoincrement())
-  userId        Int
+  userId        String
   tripId        Int
   seatNumber    String?
   qrCode        String       @unique
@@ -177,7 +175,7 @@ model Ticket {
 model Payment {
   id                Int           @id @default(autoincrement())
   ticketId          Int           @unique
-  userId            Int
+  userId            String
   amount            Float
   currency          String        @default("FCFA")
   paydunyaToken     String?       @unique
