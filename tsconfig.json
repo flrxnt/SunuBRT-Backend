@@ -21,5 +21,13 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
+  },
+  "watchOptions": {
+    "watchFile": "dynamicPriorityPolling",
+    "watchDirectory": "dynamicPriorityPolling",
+    "fallbackPolling": "dynamicpriority",
+    "synchronousWatchDirectory": true,
+    "excludeDirectories": ["node_modules", "dist", ".git", "coverage"],
+    "excludeFiles": []
   }
 }

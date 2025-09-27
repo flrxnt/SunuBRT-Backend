@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: sunubrt-postgres
+    environment:
+      POSTGRES_DB: sunubrt_db
+      POSTGRES_USER: sunubrt_user
+      POSTGRES_PASSWORD: sunubrt_password
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sunubrt-network
+
+  redis:
+    image: redis:latest
+    container_name: sunubrt-redis
+    ports:
+      - '6379:6379'
+    networks:
+      - sunubrt-network
+
+  app:
+    image: node:24-alpine
+    container_name: sunubrt-app-dev
+    working_dir: /app
+    command: sh -c "npm install && npx prisma generate && npm run start:dev"
+    ports:
+      - '3000:3000'
+      - '9229:9229'
+    environment:
+      DATABASE_URL: postgresql://sunubrt_user:sunubrt_password@postgres:5432/sunubrt_db
+      JWT_SECRET: your-super-secret-jwt-key
+      PAYDUNYA_MASTER_KEY: your-paydunya-master-key
+      PAYDUNYA_PRIVATE_KEY: your-paydunya-private-key
+      PAYDUNYA_TOKEN: your-paydunya-token
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: 'true'
+      TSC_WATCHFILE: UsePolling
+      TSC_WATCHDIRECTORY: UsePolling
+      WATCHPACK_POLLING: 'true'
+      WATCHPACK_POLLING_INTERVAL: '1000'
+      CHOKIDAR_INTERVAL: '1000'
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+
+    depends_on:
+      - postgres
+      - redis
+    develop:
+      watch:
+        - path: .
+          target: /app
+          action: sync
+          ignore:
+            - node_modules/
+
+            - dist/
+            - coverage/
+
+            - .git/
+        - path: package.json
+
+          action: rebuild
+
+        - path: package-lock.json
+
+          action: rebuild
+
+    networks:
+      - sunubrt-network
+
+volumes:
+  postgres_data:
+  node_modules:
+
+networks:
+  sunubrt-network:
+    driver: bridge
