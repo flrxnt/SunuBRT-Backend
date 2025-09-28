@@ -23,6 +23,14 @@ export enum TicketPricingType {
   DISABLED = 'DISABLED',
 }
 
+export enum TicketType {
+  SINGLE_USE = 'SINGLE_USE',
+  DAILY_PASS = 'DAILY_PASS',
+  WEEKLY_PASS = 'WEEKLY_PASS',
+  MONTHLY_PASS = 'MONTHLY_PASS',
+  ANNUAL_PASS = 'ANNUAL_PASS',
+}
+
 export enum ValidityPeriodType {
   HOURS = 'HOURS',
   DAYS = 'DAYS',
@@ -49,6 +57,17 @@ export class CreateTicketPricingDto {
     message: 'Le type doit être une valeur valide',
   })
   type: TicketPricingType;
+
+  @ApiProperty({
+    description: 'Type de ticket (usage unique ou abonnement)',
+    enum: TicketType,
+    example: TicketType.SINGLE_USE,
+  })
+  @IsNotEmpty({ message: 'Le type de ticket est requis' })
+  @IsEnum(TicketType, {
+    message: 'Le type de ticket doit être une valeur valide',
+  })
+  ticketType: TicketType;
 
   @ApiProperty({
     description: 'Prix du ticket en FCFA',
@@ -86,6 +105,28 @@ export class CreateTicketPricingDto {
     message: "L'unité doit être une valeur valide",
   })
   validityPeriodType: ValidityPeriodType;
+
+  @ApiPropertyOptional({
+    description: "Nombre maximum d'utilisations pour cette tarification",
+    example: 60,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "Le nombre max d'utilisations doit être un nombre" })
+  @Min(1, { message: "Le nombre minimum d'utilisations est de 1" })
+  @Type(() => Number)
+  maxUsages?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Indique si les tickets de cette tarification sont réutilisables',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'isReusable doit être un booléen' })
+  @Type(() => Boolean)
+  isReusable?: boolean = false;
 
   @ApiPropertyOptional({
     description: 'ID de la ligne spécifique (optionnel)',
@@ -172,6 +213,17 @@ export class CreateTicketPricingDto {
   @IsOptional()
   @IsString({ message: 'Les conditions doivent être une chaîne' })
   specialConditions?: string;
+
+  @ApiPropertyOptional({
+    description: "Règles d'utilisation spécifiques (JSON)",
+    example: {
+      maxUsagesPerDay: 10,
+      allowedLines: [1, 2],
+      restrictions: ['peak_hours_only'],
+    },
+  })
+  @IsOptional()
+  usageRules?: Record<string, any>;
 }
 
 export class UpdateTicketPricingDto {
@@ -219,6 +271,25 @@ export class UpdateTicketPricingDto {
     message: "L'unité doit être une valeur valide",
   })
   validityPeriodType?: ValidityPeriodType;
+
+  @ApiPropertyOptional({
+    description: "Nombre maximum d'utilisations pour cette tarification",
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: "Le nombre max d'utilisations doit être un nombre" })
+  @Min(1, { message: "Le nombre minimum d'utilisations est de 1" })
+  @Type(() => Number)
+  maxUsages?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Indique si les tickets de cette tarification sont réutilisables',
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'isReusable doit être un booléen' })
+  @Type(() => Boolean)
+  isReusable?: boolean;
 
   @ApiPropertyOptional({
     description: 'Description de la tarification',
@@ -279,6 +350,12 @@ export class UpdateTicketPricingDto {
   @IsOptional()
   @IsString({ message: 'Les conditions doivent être une chaîne' })
   specialConditions?: string;
+
+  @ApiPropertyOptional({
+    description: "Règles d'utilisation spécifiques (JSON)",
+  })
+  @IsOptional()
+  usageRules?: Record<string, any>;
 }
 
 export class BulkUpdatePricingDto {

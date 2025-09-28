@@ -8,10 +8,11 @@ import {
   Delete,
   UseGuards,
   Query,
-  HttpStatus,
+  Req,
   BadRequestException,
-  NotFoundException,
   ParseIntPipe,
+  HttpCode,
+  HttpStatus,
   DefaultValuePipe,
 } from '@nestjs/common';
 import {
@@ -21,9 +22,13 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 import { TicketsService } from './tickets.service';
-import { CreateTicketDto } from './dto/create-ticket.dto';
+import {
+  CreateTicketDto,
+  CreateSubscriptionTicketDto,
+} from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   ValidateTicketDto,
@@ -48,6 +53,16 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role, TicketStatus } from '@prisma/client';
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    sub: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: Role;
+  };
+}
 
 @ApiTags('Tickets')
 @Controller('api/v1/tickets')
@@ -735,5 +750,299 @@ export class TicketsController {
   ) {
     // Cette méthode devra être implémentée dans le service
     throw new Error('Fonctionnalité non implémentée');
+  }
+
+  // ===============================
+  // STATISTIQUES DES ABONNEMENTS
+  // ===============================
+
+  @Get('admin/subscriptions/statistics')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Statistiques des abonnements (Admin)',
+    description: 'Retourne des statistiques détaillées sur les abonnements',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    description: 'Date de début pour les statistiques',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    description: 'Date de fin pour les statistiques',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistiques des abonnements',
+  })
+  async getSubscriptionStatistics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return await this.ticketsService.getSubscriptionStatistics(
+      startDate,
+      endDate,
+    );
+  }
+
+  @Get('admin/usage-analytics')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Analytics d'utilisation des tickets (Admin)",
+    description:
+      "Retourne des analytics sur l'utilisation des tickets et abonnements",
+  })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['daily', 'weekly', 'monthly'],
+    description: 'Période pour les analytics',
+  })
+  @ApiQuery({
+    name: 'ticketType',
+    required: false,
+    enum: [
+      'SINGLE_USE',
+      'DAILY_PASS',
+      'WEEKLY_PASS',
+      'MONTHLY_PASS',
+      'ANNUAL_PASS',
+    ],
+    description: 'Type de ticket à analyser',
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Analytics d'utilisation",
+  })
+  async getUsageAnalytics(
+    @Query('period') period: string = 'daily',
+    @Query('ticketType') ticketType?: string,
+  ) {
+    return await this.ticketsService.getUsageAnalytics(period, ticketType);
+  }
+
+  // ===============================
+  // GESTION DES ABONNEMENTS
+  // ===============================
+
+  @Post('subscription')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Créer un abonnement',
+    description: "Crée un ticket d'abonnement après paiement confirmé",
+  })
+  @ApiBody({
+    type: CreateSubscriptionTicketDto,
+    description: "Données pour créer l'abonnement",
+    examples: {
+      monthlyPass: {
+        summary: 'Abonnement mensuel',
+        value: {
+          paymentId: 123,
+          ticketType: 'MONTHLY_PASS',
+          lineId: 1,
+          validFrom: '2024-01-15T08:00:00Z',
+          maxUsages: 60,
+          notes: 'Abonnement mensuel ligne 1',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Abonnement créé avec succès',
+    schema: {
+      example: {
+        id: 456,
+        ticketType: 'MONTHLY_PASS',
+        qrCode: 'SUNUBRT-SUB-1705747200-abc123',
+        status: 'ACTIVE',
+        validFrom: '2024-01-15T08:00:00Z',
+        validUntil: '2024-02-15T08:00:00Z',
+        maxUsages: 60,
+        currentUsages: 0,
+        isReusable: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Données invalides ou paiement non confirmé',
+  })
+  @ApiResponse({ status: 404, description: 'Paiement non trouvé' })
+  async createSubscription(
+    @Body() createSubscriptionDto: CreateSubscriptionTicketDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return await this.ticketsService.createSubscriptionTicket(
+      createSubscriptionDto,
+      req.user.sub,
+    );
+  }
+
+  @Get(':id/usage-history')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Historique des utilisations d'un ticket",
+    description:
+      "Obtient l'historique complet des utilisations d'un ticket ou abonnement",
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID du ticket',
+    type: 'number',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Historique des utilisations',
+    schema: {
+      example: {
+        ticket: {
+          id: 1,
+          ticketType: 'MONTHLY_PASS',
+          isReusable: true,
+          currentUsages: 15,
+          maxUsages: 60,
+          validFrom: '2024-01-15T08:00:00Z',
+          validUntil: '2024-02-15T08:00:00Z',
+        },
+        usages: [
+          {
+            id: 1,
+            usedAt: '2024-01-20T08:30:00Z',
+            trip: {
+              routeName: 'Dakar Centre → Guédiawaye',
+              lineName: 'Ligne 1',
+              startTime: '2024-01-20T08:00:00Z',
+              busNumber: 'BRT001',
+            },
+            validator: {
+              name: 'Amadou Conducteur',
+            },
+          },
+        ],
+        summary: {
+          totalUsages: 15,
+          remainingUsages: 45,
+          canStillUse: true,
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Ticket non trouvé' })
+  async getTicketUsageHistory(
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return await this.ticketsService.getTicketUsageHistory(
+      ticketId,
+      req.user.sub,
+    );
+  }
+
+  @Patch(':id/suspend')
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Suspendre/Réactiver un abonnement',
+    description:
+      'Suspend ou réactive un abonnement (utilisateur propriétaire seulement)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID du ticket/abonnement',
+    type: 'number',
+    example: 1,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Raison de la suspension/réactivation',
+          example: 'Vol du téléphone',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Statut modifié avec succès',
+    schema: {
+      example: {
+        id: 1,
+        status: 'SUSPENDED',
+        ticketType: 'MONTHLY_PASS',
+        validUntil: '2024-02-15T08:00:00Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Abonnement non trouvé' })
+  async toggleSubscriptionSuspension(
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Body('reason') reason?: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return await this.ticketsService.toggleTicketSuspension(
+      ticketId,
+      req.user.sub,
+      reason,
+      false,
+    );
+  }
+
+  // ===============================
+  // ENDPOINTS ADMIN POUR ABONNEMENTS
+  // ===============================
+
+  @Patch('admin/:id/suspend')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Suspendre/Réactiver un abonnement (Admin)',
+    description:
+      "Suspend ou réactive n'importe quel abonnement (admin seulement)",
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID du ticket/abonnement',
+    type: 'number',
+    example: 1,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: {
+          type: 'string',
+          description: 'Raison de la suspension/réactivation',
+          example: 'Fraude détectée',
+        },
+      },
+      required: ['reason'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Statut modifié avec succès' })
+  @ApiResponse({ status: 404, description: 'Abonnement non trouvé' })
+  async adminToggleSubscriptionSuspension(
+    @Param('id', ParseIntPipe) ticketId: number,
+    @Body('reason') reason: string,
+  ) {
+    return await this.ticketsService.toggleTicketSuspension(
+      ticketId,
+      '', // userId vide car admin
+      reason,
+      true, // isAdmin = true
+    );
   }
 }

@@ -16,9 +16,18 @@ enum Role {
 enum TicketStatus {
   PENDING
   PAID
-  USED
+  ACTIVE
+  SUSPENDED
   CANCELLED
   EXPIRED
+}
+
+enum TicketType {
+  SINGLE_USE
+  DAILY_PASS
+  WEEKLY_PASS
+  MONTHLY_PASS
+  ANNUAL_PASS
 }
 
 enum PaymentStatus {
@@ -52,6 +61,7 @@ model User {
   tickets         Ticket[]
   payments        Payment[]
   adminRefunds    Refund[]  @relation("AdminRefunds")
+  ticketValidations TicketUsage[] @relation("TicketValidator")
 
   @@map("users")
 }
@@ -93,6 +103,7 @@ model Bus {
   driver           User          @relation("DriverToBus", fields: [driverId], references: [id])
   currentPosition  Position?
   trips            Trip[]
+  ticketUsages     TicketUsage[]
 
   @@map("buses")
 }
@@ -130,9 +141,10 @@ model Route {
   line          Line?       @relation(fields: [lineId], references: [id])
   startPoint    RoutePoint? @relation("RouteStartPoint", fields: [startPointId], references: [id])
   endPoint      RoutePoint? @relation("RouteEndPoint", fields: [endPointId], references: [id])
-  trips         Trip[]
+  trips            Trip[]
   points        RoutePoint[] @relation("RoutePoints")
   ticketPricing TicketPricing[]
+  ticketUsages  TicketUsage[]
 
   @@map("routes")
 }
@@ -173,6 +185,7 @@ model Trip {
   route         Route      @relation(fields: [routeId], references: [id])
   bus           Bus        @relation(fields: [busId], references: [id])
   tickets       Ticket[]
+  ticketUsages  TicketUsage[]
 
   @@map("trips")
 }
@@ -180,13 +193,17 @@ model Trip {
 model Ticket {
   id                  Int          @id @default(autoincrement())
   userId              String
-  tripId              Int
+  tripId              Int?         // Optionnel pour les abonnements
+  ticketType          TicketType   @default(SINGLE_USE)
   seatNumber          String?
   qrCode              String       @unique
   status              TicketStatus @default(PENDING)
   purchaseDate        DateTime     @default(now())
+  validFrom           DateTime     @default(now())
   validUntil          DateTime?
-  usedAt              DateTime?
+  maxUsages           Int?         // Nombre max d'utilisations (null = illimité)
+  currentUsages       Int          @default(0)
+  isReusable          Boolean      @default(false)
 
   notes               String?
   validationNotes     String?
@@ -196,12 +213,35 @@ model Ticket {
   pricingId           Int?
 
   // Relations
-  user          User         @relation(fields: [userId], references: [id])
-  trip          Trip         @relation(fields: [tripId], references: [id])
-  pricing       TicketPricing? @relation(fields: [pricingId], references: [id])
+  user          User              @relation(fields: [userId], references: [id])
+  trip          Trip?             @relation(fields: [tripId], references: [id])
+  pricing       TicketPricing?    @relation(fields: [pricingId], references: [id])
   payment       Payment?
+  usages        TicketUsage[]
 
   @@map("tickets")
+}
+
+model TicketUsage {
+  id              Int      @id @default(autoincrement())
+  ticketId        Int
+  tripId          Int?
+  routeId         Int?
+  busId           String?
+  usedAt          DateTime @default(now())
+  validatorId     String?  // ID du conducteur/contrôleur qui a validé
+  latitude        Float?
+  longitude       Float?
+  notes           String?
+
+  // Relations
+  ticket          Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  trip            Trip?    @relation(fields: [tripId], references: [id])
+  route           Route?   @relation(fields: [routeId], references: [id])
+  bus             Bus?     @relation(fields: [busId], references: [id])
+  validator       User?    @relation("TicketValidator", fields: [validatorId], references: [id])
+
+  @@map("ticket_usages")
 }
 
 model Payment {
@@ -255,9 +295,12 @@ model TicketPricing {
   id                  Int                 @id @default(autoincrement())
   name                String
   type                String              // STANDARD, EXPRESS, PREMIUM, STUDENT, etc.
+  ticketType          TicketType          @default(SINGLE_USE)
   price               Float
   validityDuration    Int                 // Durée de validité
   validityPeriodType  String              // HOURS, DAYS, WEEKS, MONTHS
+  maxUsages           Int?                // Nombre max d'utilisations pour ce tarif
+  isReusable          Boolean             @default(false)
   lineId              Int?
   routeId             Int?
   description         String?
@@ -267,6 +310,7 @@ model TicketPricing {
   isActive            Boolean             @default(true)
   maxTickets          Int?
   specialConditions   String?
+  usageRules          Json                @default("{}")  // Règles spécifiques d'utilisation
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 

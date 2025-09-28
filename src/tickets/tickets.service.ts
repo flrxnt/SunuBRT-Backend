@@ -7,7 +7,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateTicketDto } from './dto/create-ticket.dto';
+import {
+  CreateTicketDto,
+  CreateSubscriptionTicketDto,
+  TicketType as TicketTypeEnum,
+} from './dto/create-ticket.dto';
 import {
   InitiateTicketPurchaseDto,
   GetAvailablePricingDto,
@@ -23,7 +27,13 @@ import {
   TicketPricingType,
   ValidityPeriodType,
 } from './dto/ticket-pricing.dto';
-import { TicketStatus, Role, TripStatus, PaymentStatus } from '@prisma/client';
+import {
+  TicketStatus,
+  Role,
+  TripStatus,
+  PaymentStatus,
+  TicketType,
+} from '@prisma/client';
 import { WebsocketsGateway } from '../websockets/websockets.gateway';
 import { PaymentsService } from '../payments/payments.service';
 import * as QRCode from 'qrcode';
@@ -159,7 +169,16 @@ export class TicketsService {
    * Méthode pour créer un ticket après paiement confirmé
    */
   async create(createTicketDto: CreateTicketDto, userId: string) {
-    const { paymentId, seatNumber, notes } = createTicketDto;
+    const {
+      paymentId,
+      tripId,
+      ticketType,
+      seatNumber,
+      validFrom,
+      maxUsages,
+      isReusable,
+      notes,
+    } = createTicketDto;
 
     // Vérifier que le paiement existe et est confirmé
     const payment = await this.prisma.payment.findUnique({
@@ -213,6 +232,28 @@ export class TicketsService {
 
     if (payment.status !== PaymentStatus.COMPLETED) {
       throw new BadRequestException("Le paiement n'est pas encore confirmé");
+    }
+
+    // Pour les abonnements, créer un nouveau ticket
+    if (
+      ticketType &&
+      [
+        TicketType.DAILY_PASS,
+        TicketType.WEEKLY_PASS,
+        TicketType.MONTHLY_PASS,
+        TicketType.ANNUAL_PASS,
+      ].includes(ticketType as TicketType)
+    ) {
+      return await this.createSubscriptionTicket(
+        {
+          paymentId,
+          ticketType: ticketType as any,
+          validFrom,
+          maxUsages,
+          notes,
+        },
+        userId,
+      );
     }
 
     if (!payment.ticket) {
@@ -398,6 +439,136 @@ export class TicketsService {
     return ticket;
   }
 
+  /**
+   * Créer un ticket d'abonnement
+   */
+  async createSubscriptionTicket(
+    createSubscriptionDto: CreateSubscriptionTicketDto,
+    userId: string,
+  ) {
+    const { paymentId, ticketType, lineId, validFrom, maxUsages, notes } =
+      createSubscriptionDto;
+
+    // Vérifier que le paiement existe et est confirmé
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Paiement non trouvé');
+    }
+
+    if (payment.userId !== userId) {
+      throw new BadRequestException('Ce paiement ne vous appartient pas');
+    }
+
+    if (payment.status !== PaymentStatus.COMPLETED) {
+      throw new BadRequestException("Le paiement n'est pas encore confirmé");
+    }
+
+    // Calculer la durée de validité selon le type d'abonnement
+    const startDate = validFrom ? new Date(validFrom) : new Date();
+    let endDate: Date;
+
+    switch (ticketType) {
+      case TicketType.DAILY_PASS:
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1);
+        break;
+      case TicketType.WEEKLY_PASS:
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 7);
+        break;
+      case TicketType.MONTHLY_PASS:
+        endDate = new Date(startDate);
+        endDate.setMonth(startDate.getMonth() + 1);
+        break;
+      case TicketType.ANNUAL_PASS:
+        endDate = new Date(startDate);
+        endDate.setFullYear(startDate.getFullYear() + 1);
+        break;
+      default:
+        throw new BadRequestException("Type d'abonnement invalide");
+    }
+
+    // Générer un QR code unique
+    const qrCode = `SUNUBRT-SUB-${Date.now()}-${uuidv4()}`;
+
+    // Créer le ticket d'abonnement
+    const ticket = await this.prisma.ticket.create({
+      data: {
+        userId,
+        ticketType,
+        qrCode,
+        status: TicketStatus.ACTIVE,
+        purchaseDate: new Date(),
+        validFrom: startDate,
+        validUntil: endDate,
+        maxUsages,
+        currentUsages: 0,
+        isReusable: true,
+        notes,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        usages: {
+          orderBy: { usedAt: 'desc' },
+          take: 5,
+          include: {
+            trip: {
+              include: {
+                route: {
+                  include: {
+                    line: true,
+                  },
+                },
+                bus: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Associer le ticket au paiement
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: { ticketId: ticket.id },
+    });
+
+    this.logger.log(
+      `Abonnement créé: ID ${ticket.id}, Type: ${ticketType}, Utilisateur: ${userId}`,
+    );
+
+    // Notification WebSocket
+    this.websocketsGateway.emitToUser(userId, 'subscriptionCreated', {
+      ticketId: ticket.id,
+      ticketType,
+      validFrom: startDate.toISOString(),
+      validUntil: endDate.toISOString(),
+      maxUsages,
+    });
+
+    return ticket;
+  }
+
   async generateQRCode(ticketId: number, userId: string) {
     const ticket = await this.findOne(ticketId, userId);
 
@@ -445,7 +616,15 @@ export class TicketsService {
     validateTicketDto: ValidateTicketDto,
     currentUser: any,
   ): Promise<TicketValidationResponseDto> {
-    const { qrCode, latitude, longitude, notes } = validateTicketDto;
+    const {
+      qrCode,
+      tripId,
+      busId,
+      validationContext,
+      latitude,
+      longitude,
+      notes,
+    } = validateTicketDto;
 
     // Seuls les conducteurs et admins peuvent valider les tickets
     if (![Role.DRIVER, Role.ADMIN].includes(currentUser.role)) {
@@ -475,6 +654,22 @@ export class TicketsService {
             email: true,
           },
         },
+        usages: {
+          orderBy: { usedAt: 'desc' },
+          take: 10,
+          include: {
+            trip: {
+              include: {
+                route: {
+                  include: {
+                    line: true,
+                  },
+                },
+                bus: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -486,48 +681,126 @@ export class TicketsService {
       };
     }
 
-    if (ticket.status !== TicketStatus.PAID) {
+    // Vérifier le statut du ticket
+    if (ticket.status === TicketStatus.PENDING) {
       return {
         isValid: false,
-        message: "Ce ticket n'est pas valide pour le voyage",
-        errorCode: 'TICKET_NOT_PAID',
+        message: "Ce ticket n'est pas encore activé",
+        errorCode: 'TICKET_PENDING',
       };
     }
 
-    if (ticket.usedAt) {
+    if (ticket.status === TicketStatus.CANCELLED) {
+      return {
+        isValid: false,
+        message: 'Ce ticket a été annulé',
+        errorCode: 'TICKET_CANCELLED',
+      };
+    }
+
+    if (ticket.status === TicketStatus.SUSPENDED) {
+      return {
+        isValid: false,
+        message: 'Ce ticket est suspendu',
+        errorCode: 'TICKET_SUSPENDED',
+      };
+    }
+
+    if (![TicketStatus.PAID, TicketStatus.ACTIVE].includes(ticket.status)) {
+      return {
+        isValid: false,
+        message: "Ce ticket n'est pas valide",
+        errorCode: 'TICKET_INVALID',
+      };
+    }
+
+    // Vérification spécifique aux tickets à usage unique
+    if (!ticket.isReusable && ticket.currentUsages > 0) {
       return {
         isValid: false,
         message: 'Ce ticket a déjà été utilisé',
         ticket: {
           id: ticket.id,
           qrCode: ticket.qrCode,
+          ticketType: ticket.ticketType,
           seatNumber: ticket.seatNumber,
           passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
-          tripInfo: {
-            routeName: ticket.trip.route.name,
-            startTime: ticket.trip.startTime.toISOString(),
-            busNumber: ticket.trip.bus.busNumber,
-          },
-          usedAt: ticket.usedAt?.toISOString(),
+          isReusable: false,
+          currentUsages: ticket.currentUsages,
+          maxUsages: ticket.maxUsages,
+          tripInfo: ticket.trip
+            ? {
+                routeName: ticket.trip.route.name,
+                startTime: ticket.trip.startTime.toISOString(),
+                busNumber: ticket.trip.bus.busNumber,
+              }
+            : undefined,
+          validFrom: ticket.validFrom?.toISOString(),
+          validUntil: ticket.validUntil?.toISOString(),
+          lastUsedAt: ticket.usages[0]?.usedAt?.toISOString(),
         },
         errorCode: 'TICKET_ALREADY_USED',
       };
     }
 
-    if (ticket.validUntil && new Date() > ticket.validUntil) {
+    // Vérification du nombre maximum d'utilisations
+    if (ticket.maxUsages && ticket.currentUsages >= ticket.maxUsages) {
+      return {
+        isValid: false,
+        message: "Ce ticket a atteint son nombre maximum d'utilisations",
+        ticket: {
+          id: ticket.id,
+          qrCode: ticket.qrCode,
+          ticketType: ticket.ticketType,
+          seatNumber: ticket.seatNumber,
+          passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
+          isReusable: ticket.isReusable,
+          currentUsages: ticket.currentUsages,
+          maxUsages: ticket.maxUsages,
+          validFrom: ticket.validFrom?.toISOString(),
+          validUntil: ticket.validUntil?.toISOString(),
+        },
+        errorCode: 'TICKET_MAX_USAGES_REACHED',
+        remainingUsages: 0,
+      };
+    }
+
+    // Vérification de la période de validité
+    const now = new Date();
+    if (ticket.validFrom && now < ticket.validFrom) {
+      return {
+        isValid: false,
+        message: "Ce ticket n'est pas encore valide",
+        ticket: {
+          id: ticket.id,
+          qrCode: ticket.qrCode,
+          ticketType: ticket.ticketType,
+          seatNumber: ticket.seatNumber,
+          passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
+          isReusable: ticket.isReusable,
+          currentUsages: ticket.currentUsages,
+          maxUsages: ticket.maxUsages,
+          validFrom: ticket.validFrom?.toISOString(),
+          validUntil: ticket.validUntil?.toISOString(),
+        },
+        errorCode: 'TICKET_NOT_YET_VALID',
+      };
+    }
+
+    if (ticket.validUntil && now > ticket.validUntil) {
       return {
         isValid: false,
         message: 'Ce ticket a expiré',
         ticket: {
           id: ticket.id,
           qrCode: ticket.qrCode,
+          ticketType: ticket.ticketType,
           seatNumber: ticket.seatNumber,
           passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
-          tripInfo: {
-            routeName: ticket.trip.route.name,
-            startTime: ticket.trip.startTime.toISOString(),
-            busNumber: ticket.trip.bus.busNumber,
-          },
+          isReusable: ticket.isReusable,
+          currentUsages: ticket.currentUsages,
+          maxUsages: ticket.maxUsages,
+          validFrom: ticket.validFrom?.toISOString(),
           validUntil: ticket.validUntil?.toISOString(),
         },
         errorCode: 'TICKET_EXPIRED',
@@ -535,10 +808,10 @@ export class TicketsService {
     }
 
     // Pour les conducteurs : vérifier qu'ils valident pour leur propre bus
-    if (currentUser.role === Role.DRIVER) {
+    if (currentUser.role === Role.DRIVER && busId) {
       const bus = await this.prisma.bus.findFirst({
         where: {
-          id: ticket.trip.busId,
+          id: busId,
           driverId: currentUser.sub,
         },
       });
@@ -550,15 +823,49 @@ export class TicketsService {
       }
     }
 
-    // Marquer le ticket comme utilisé
+    // Créer une nouvelle utilisation du ticket
+    const ticketUsage = await this.prisma.ticketUsage.create({
+      data: {
+        ticketId: ticket.id,
+        tripId: tripId || ticket.tripId,
+        busId,
+        usedAt: new Date(),
+        validatorId: currentUser.sub,
+        latitude,
+        longitude,
+        notes,
+      },
+      include: {
+        ticket: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+        trip: {
+          include: {
+            route: {
+              include: {
+                line: true,
+              },
+            },
+            bus: true,
+          },
+        },
+      },
+    });
+
+    // Mettre à jour le compteur d'utilisations du ticket
     const updatedTicket = await this.prisma.ticket.update({
       where: { id: ticket.id },
       data: {
-        status: TicketStatus.USED,
-        usedAt: new Date(),
-        validationNotes: notes,
-        validationLocation:
-          latitude && longitude ? `${latitude},${longitude}` : undefined,
+        currentUsages: ticket.currentUsages + 1,
+        // Marquer comme utilisé seulement si c'est un ticket à usage unique
+        status: !ticket.isReusable ? TicketStatus.USED : ticket.status,
       },
       include: {
         trip: {
@@ -568,6 +875,7 @@ export class TicketsService {
                 line: true,
               },
             },
+            bus: true,
           },
         },
         user: {
@@ -576,6 +884,10 @@ export class TicketsService {
             lastName: true,
           },
         },
+        usages: {
+          orderBy: { usedAt: 'desc' },
+          take: 1,
+        },
       },
     });
 
@@ -583,26 +895,64 @@ export class TicketsService {
     if (this.websocketsGateway) {
       this.websocketsGateway.emitToUser(ticket.userId, 'ticket:validated', {
         ticketId: ticket.id,
-        validatedAt: updatedTicket.usedAt,
+        usageId: ticketUsage.id,
+        validatedAt: ticketUsage.usedAt,
         validatedBy: `${currentUser.firstName} ${currentUser.lastName}`,
+        currentUsages: updatedTicket.currentUsages,
+        remainingUsages: ticket.maxUsages
+          ? ticket.maxUsages - updatedTicket.currentUsages
+          : null,
+        isReusable: ticket.isReusable,
+        tripInfo: ticketUsage.trip
+          ? {
+              routeName: ticketUsage.trip.route.name,
+              startTime: ticketUsage.trip.startTime.toISOString(),
+              busNumber: ticketUsage.trip.bus.busNumber,
+            }
+          : undefined,
       });
     }
 
+    const remainingUsages = ticket.maxUsages
+      ? ticket.maxUsages - updatedTicket.currentUsages
+      : null;
+
     return {
       isValid: true,
-      message: 'Ticket validé avec succès',
+      message: ticket.isReusable
+        ? `Ticket validé avec succès. ${remainingUsages !== null ? `Utilisations restantes: ${remainingUsages}` : 'Utilisations illimitées'}`
+        : 'Ticket validé avec succès',
       ticket: {
         id: updatedTicket.id,
         qrCode: updatedTicket.qrCode,
+        ticketType: ticket.ticketType,
         seatNumber: updatedTicket.seatNumber,
         passengerName: `${updatedTicket.user.firstName} ${updatedTicket.user.lastName}`,
-        tripInfo: {
-          routeName: updatedTicket.trip.route.name,
-          startTime: updatedTicket.trip.startTime.toISOString(),
-          busNumber: ticket.trip.bus.busNumber,
-        },
-        usedAt: updatedTicket.usedAt?.toISOString(),
+        isReusable: ticket.isReusable,
+        currentUsages: updatedTicket.currentUsages,
+        maxUsages: ticket.maxUsages,
+        tripInfo: ticketUsage.trip
+          ? {
+              routeName: ticketUsage.trip.route.name,
+              startTime: ticketUsage.trip.startTime.toISOString(),
+              busNumber: ticketUsage.trip.bus.busNumber,
+            }
+          : ticket.trip
+            ? {
+                routeName: ticket.trip.route.name,
+                startTime: ticket.trip.startTime.toISOString(),
+                busNumber: ticket.trip.bus.busNumber,
+              }
+            : undefined,
+        validFrom: ticket.validFrom?.toISOString(),
+        validUntil: ticket.validUntil?.toISOString(),
+        lastUsedAt: ticketUsage.usedAt.toISOString(),
       },
+      remainingUsages,
+      canReuse:
+        ticket.isReusable &&
+        (ticket.maxUsages === null ||
+          updatedTicket.currentUsages < ticket.maxUsages),
     };
   }
 
@@ -618,7 +968,8 @@ export class TicketsService {
       throw new NotFoundException('Ticket non trouvé');
     }
 
-    if (ticket.status === TicketStatus.USED) {
+    // Pour les tickets à usage unique, vérifier s'il a été utilisé
+    if (!ticket.isReusable && ticket.currentUsages > 0) {
       throw new BadRequestException(
         "Impossible d'annuler un ticket déjà utilisé",
       );
@@ -1046,27 +1397,409 @@ export class TicketsService {
         qrCode: ticket.qrCode,
         status: ticket.status,
         seatNumber: ticket.seatNumber,
-        passengers: 1,
+        ticketType: ticket.ticketType,
+        isReusable: ticket.isReusable,
+        currentUsages: ticket.currentUsages,
+        maxUsages: ticket.maxUsages,
         purchaseDate: ticket.purchaseDate,
+        validFrom: ticket.validFrom,
         validUntil: ticket.validUntil,
-        usedAt: ticket.usedAt,
         passengerInfo: {
           name: `${ticket.user.firstName} ${ticket.user.lastName}`,
           phone: ticket.user.phone,
         },
-        tripInfo: {
-          routeName: ticket.trip.route.name,
-          lineName: ticket.trip.route.line?.name,
-          startTime: ticket.trip.startTime,
-          endTime: ticket.trip.endTime,
-          busNumber: ticket.trip.bus.busNumber,
-          price: ticket.trip.price,
-        },
+        tripInfo: ticket.trip
+          ? {
+              routeName: ticket.trip.route.name,
+              lineName: ticket.trip.route.line?.name,
+              startTime: ticket.trip.startTime,
+              endTime: ticket.trip.endTime,
+              busNumber: ticket.trip.bus.busNumber,
+              price: ticket.trip.price,
+            }
+          : null,
         paymentInfo: {
           status: ticket.payment?.status,
           paidAt: ticket.payment?.paidAt,
         },
+        recentUsages: ticket.usages?.slice(0, 5) || [],
       },
     };
+  }
+
+  /**
+   * Statistiques des abonnements
+   */
+  async getSubscriptionStatistics(startDate?: string, endDate?: string) {
+    const whereClause = {
+      ticketType: {
+        in: [
+          TicketType.DAILY_PASS,
+          TicketType.WEEKLY_PASS,
+          TicketType.MONTHLY_PASS,
+          TicketType.ANNUAL_PASS,
+        ],
+      },
+      ...(startDate && endDate
+        ? {
+            purchaseDate: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }
+        : {}),
+    };
+
+    const [
+      totalSubscriptions,
+      activeSubscriptions,
+      expiredSubscriptions,
+      subscriptionsByType,
+      totalUsages,
+      revenueStats,
+    ] = await Promise.all([
+      // Total des abonnements
+      this.prisma.ticket.count({ where: whereClause }),
+
+      // Abonnements actifs
+      this.prisma.ticket.count({
+        where: {
+          ...whereClause,
+          status: TicketStatus.ACTIVE,
+          validUntil: { gte: new Date() },
+        },
+      }),
+
+      // Abonnements expirés
+      this.prisma.ticket.count({
+        where: {
+          ...whereClause,
+          OR: [
+            { status: TicketStatus.EXPIRED },
+            { validUntil: { lt: new Date() } },
+          ],
+        },
+      }),
+
+      // Répartition par type
+      this.prisma.ticket.groupBy({
+        by: ['ticketType'],
+        where: whereClause,
+        _count: { id: true },
+        _sum: { currentUsages: true },
+      }),
+
+      // Total des utilisations
+      this.prisma.ticketUsage.count({
+        where: {
+          ticket: whereClause,
+          ...(startDate && endDate
+            ? {
+                usedAt: {
+                  gte: new Date(startDate),
+                  lte: new Date(endDate),
+                },
+              }
+            : {}),
+        },
+      }),
+
+      // Statistiques de revenus
+      this.prisma.payment.aggregate({
+        where: {
+          status: PaymentStatus.COMPLETED,
+          ticket: whereClause,
+        },
+        _sum: { amount: true },
+        _avg: { amount: true },
+      }),
+    ]);
+
+    return {
+      summary: {
+        totalSubscriptions,
+        activeSubscriptions,
+        expiredSubscriptions,
+        totalUsages,
+        averageUsagesPerSubscription:
+          totalSubscriptions > 0 ? totalUsages / totalSubscriptions : 0,
+      },
+      subscriptionsByType: subscriptionsByType.map((item) => ({
+        type: item.ticketType,
+        count: item._count.id,
+        totalUsages: item._sum.currentUsages || 0,
+        averageUsages:
+          item._count.id > 0
+            ? (item._sum.currentUsages || 0) / item._count.id
+            : 0,
+      })),
+      revenue: {
+        total: revenueStats._sum.amount || 0,
+        average: revenueStats._avg.amount || 0,
+      },
+      utilizationRate:
+        totalSubscriptions > 0
+          ? (activeSubscriptions / totalSubscriptions) * 100
+          : 0,
+    };
+  }
+
+  /**
+   * Analytics d'utilisation des tickets
+   */
+  async getUsageAnalytics(period: string = 'daily', ticketType?: string) {
+    const periodMap = {
+      daily: { unit: 'day', format: '%Y-%m-%d' },
+      weekly: { unit: 'week', format: '%Y-%u' },
+      monthly: { unit: 'month', format: '%Y-%m' },
+    };
+
+    const selectedPeriod = periodMap[period] || periodMap.daily;
+
+    const whereClause = {
+      ...(ticketType
+        ? { ticket: { ticketType: ticketType as TicketType } }
+        : {}),
+      usedAt: {
+        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 jours
+      },
+    };
+
+    const [
+      usagesByPeriod,
+      usagesByTicketType,
+      usagesByRoute,
+      peakHours,
+      topUsers,
+    ] = await Promise.all([
+      // Utilisations par période
+      this.prisma.$queryRaw`
+        SELECT
+          DATE_FORMAT(usedAt, ${selectedPeriod.format}) as period,
+          COUNT(*) as count,
+          COUNT(DISTINCT ticketId) as uniqueTickets
+        FROM ticket_usages
+        WHERE usedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        ${ticketType ? this.prisma.$queryRaw`AND ticketId IN (SELECT id FROM tickets WHERE ticketType = ${ticketType})` : this.prisma.$queryRaw``}
+        GROUP BY period
+        ORDER BY period
+      `,
+
+      // Utilisations par type de ticket
+      this.prisma.ticketUsage.groupBy({
+        by: ['ticket'],
+        where: whereClause,
+        _count: { id: true },
+      }),
+
+      // Utilisations par route
+      this.prisma.ticketUsage.groupBy({
+        by: ['routeId'],
+        where: {
+          ...whereClause,
+          routeId: { not: null },
+        },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+
+      // Heures de pointe
+      this.prisma.$queryRaw`
+        SELECT
+          HOUR(usedAt) as hour,
+          COUNT(*) as count
+        FROM ticket_usages
+        WHERE usedAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY hour
+        ORDER BY count DESC
+      `,
+
+      // Top utilisateurs (pour les abonnements)
+      this.prisma.ticketUsage.groupBy({
+        by: ['ticketId'],
+        where: {
+          ...whereClause,
+          ticket: {
+            isReusable: true,
+          },
+        },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+    ]);
+
+    return {
+      usagesByPeriod,
+      usagesByTicketType,
+      usagesByRoute,
+      peakHours,
+      topUsers: await Promise.all(
+        topUsers.map(async (usage) => {
+          const ticket = await this.prisma.ticket.findUnique({
+            where: { id: usage.ticketId },
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          });
+          return {
+            ticketId: usage.ticketId,
+            usageCount: usage._count.id,
+            user: ticket?.user
+              ? {
+                  name: `${ticket.user.firstName} ${ticket.user.lastName}`,
+                  email: ticket.user.email,
+                }
+              : null,
+            ticketType: ticket?.ticketType,
+          };
+        }),
+      ),
+    };
+  }
+
+  /**
+   * Obtenir l'historique des utilisations d'un ticket
+   */
+  async getTicketUsageHistory(ticketId: number, userId: string) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, userId },
+      include: {
+        usages: {
+          orderBy: { usedAt: 'desc' },
+          include: {
+            trip: {
+              include: {
+                route: {
+                  include: {
+                    line: true,
+                  },
+                },
+                bus: true,
+              },
+            },
+            validator: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket non trouvé');
+    }
+
+    return {
+      ticket: {
+        id: ticket.id,
+        ticketType: ticket.ticketType,
+        isReusable: ticket.isReusable,
+        currentUsages: ticket.currentUsages,
+        maxUsages: ticket.maxUsages,
+        validFrom: ticket.validFrom,
+        validUntil: ticket.validUntil,
+      },
+      usages: ticket.usages.map((usage) => ({
+        id: usage.id,
+        usedAt: usage.usedAt,
+        notes: usage.notes,
+        location:
+          usage.latitude && usage.longitude
+            ? { latitude: usage.latitude, longitude: usage.longitude }
+            : null,
+        trip: usage.trip
+          ? {
+              routeName: usage.trip.route.name,
+              lineName: usage.trip.route.line?.name,
+              startTime: usage.trip.startTime,
+              busNumber: usage.trip.bus.busNumber,
+            }
+          : null,
+        validator: usage.validator
+          ? {
+              name: `${usage.validator.firstName} ${usage.validator.lastName}`,
+            }
+          : null,
+      })),
+      summary: {
+        totalUsages: ticket.usages.length,
+        remainingUsages: ticket.maxUsages
+          ? ticket.maxUsages - ticket.currentUsages
+          : null,
+        canStillUse:
+          ticket.isReusable &&
+          ticket.status === TicketStatus.ACTIVE &&
+          (!ticket.validUntil || ticket.validUntil > new Date()) &&
+          (!ticket.maxUsages || ticket.currentUsages < ticket.maxUsages),
+      },
+    };
+  }
+
+  /**
+   * Suspendre ou réactiver un abonnement
+   */
+  async toggleTicketSuspension(
+    ticketId: number,
+    userId: string,
+    reason?: string,
+    isAdmin: boolean = false,
+  ) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: {
+        id: ticketId,
+        ...(isAdmin ? {} : { userId }),
+        isReusable: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Abonnement non trouvé');
+    }
+
+    const newStatus =
+      ticket.status === TicketStatus.SUSPENDED
+        ? TicketStatus.ACTIVE
+        : TicketStatus.SUSPENDED;
+
+    const updatedTicket = await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: newStatus,
+        notes: reason
+          ? `${ticket.notes || ''}\n${new Date().toISOString()}: ${newStatus === TicketStatus.SUSPENDED ? 'Suspendu' : 'Réactivé'} - ${reason}`
+          : ticket.notes,
+      },
+    });
+
+    this.logger.log(
+      `Abonnement ${newStatus === TicketStatus.SUSPENDED ? 'suspendu' : 'réactivé'}: ID ${ticketId}, Raison: ${reason}`,
+    );
+
+    // Notification WebSocket
+    if (this.websocketsGateway) {
+      this.websocketsGateway.emitToUser(
+        ticket.userId,
+        'subscription:statusChanged',
+        {
+          ticketId: ticket.id,
+          newStatus,
+          reason,
+          changedAt: new Date().toISOString(),
+        },
+      );
+    }
+
+    return updatedTicket;
   }
 }
