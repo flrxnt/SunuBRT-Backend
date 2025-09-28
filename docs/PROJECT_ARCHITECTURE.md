@@ -13,6 +13,8 @@ sunubrt-backend/
 │   ├── app.module.ts
 │   ├── common/
 │   │   ├── decorators/
+│   │   │   ├── current-user.decorator.
+│   │   │   ├── permissions.decorator.ts
 │   │   │   ├── public.decorator.ts
 │   │   │   └── roles.decorator.ts
 │   │   ├── guards/

@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsNumber,
-  IsOptional,
-  Min,
-  Max,
-  IsDateString,
-} from 'class-validator';
+import { IsNumber, IsOptional, Min, Max, IsDateString } from 'class-validator';
 
 export class UpdatePositionDto {
   @ApiProperty({

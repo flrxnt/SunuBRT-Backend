@@ -6,9 +6,10 @@ import {
   Patch,
   Param,
   Delete,
-  Request,
   Query,
   ParseIntPipe,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,16 +25,35 @@ import { UpdateBusDto } from './dto/update-bus.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { Bus } from './entities/bus.entity';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
+import { AuthGuard } from '../common/guards/auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { BusOwnershipGuard } from '../common/guards/bus-ownership.guard';
+import {
+  CurrentUser,
+  CurrentUserData,
+} from '../common/decorators/current-user.decorator';
+import { AccessLogInterceptor } from '../common/interceptors/access-log.interceptor';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import {
+  RequiresBusManagement,
+  RequiresBusRead,
+  RequiresBusPositionUpdate,
+  RequiresAdminAccess,
+} from '../common/decorators/permissions.decorator';
 import { Role } from '@prisma/client';
 
 @ApiTags('Buses')
 @ApiBearerAuth()
 @Controller('buses')
+@UseGuards(AuthGuard, RolesGuard, PermissionsGuard)
+@UseInterceptors(AccessLogInterceptor)
 export class BusesController {
   constructor(private readonly busesService: BusesService) {}
 
   @Post()
   @Roles(Role.ADMIN)
+  @RequiresBusManagement()
   @ApiOperation({
     summary: 'Créer un nouveau bus (Admin uniquement)',
     description:
@@ -50,11 +70,16 @@ export class BusesController {
     status: 409,
     description: 'Conflit - numéro de bus ou plaque existante',
   })
-  async create(@Body() createBusDto: CreateBusDto, @Request() req) {
-    return this.busesService.create(createBusDto, req.user);
+  async create(
+    @Body() createBusDto: CreateBusDto,
+    @CurrentUser() user: CurrentUserData,
+  ) {
+    return this.busesService.create(createBusDto, user);
   }
 
   @Get()
+  @Public()
+  @RequiresBusRead()
   @ApiOperation({
     summary: 'Récupérer tous les bus',
     description:
@@ -96,6 +121,7 @@ export class BusesController {
 
   @Get('statistics')
   @Roles(Role.ADMIN)
+  @RequiresAdminAccess()
   @ApiOperation({
     summary: 'Récupérer les statistiques des bus (Admin uniquement)',
     description:
@@ -106,11 +132,13 @@ export class BusesController {
     description: 'Statistiques récupérées avec succès',
   })
   @ApiResponse({ status: 403, description: 'Accès interdit' })
-  async getStatistics(@Request() req) {
+  async getStatistics(@CurrentUser() user: CurrentUserData) {
     return this.busesService.getBusStatistics();
   }
 
   @Get('line/:lineId')
+  @Public()
+  @RequiresBusRead()
   @ApiOperation({
     summary: "Récupérer tous les bus d'une ligne spécifique",
     description: 'Récupère tous les bus actifs associés à une ligne donnée',
@@ -131,6 +159,8 @@ export class BusesController {
   }
 
   @Get(':id')
+  @Public()
+  @RequiresBusRead()
   @ApiOperation({
     summary: 'Récupérer un bus par ID',
     description: "Récupère les détails complets d'un bus spécifique",
@@ -152,6 +182,8 @@ export class BusesController {
 
   @Patch(':id/position')
   @Roles(Role.DRIVER, Role.ADMIN)
+  @UseGuards(AuthGuard, RolesGuard, BusOwnershipGuard)
+  @RequiresBusPositionUpdate()
   @ApiOperation({
     summary: 'Mettre à jour la position du bus (Conducteur/Admin)',
     description:
@@ -172,13 +204,14 @@ export class BusesController {
   async updatePosition(
     @Param('id') id: string,
     @Body() updatePositionDto: UpdatePositionDto,
-    @Request() req,
+    @CurrentUser() user: CurrentUserData,
   ) {
-    return this.busesService.updatePosition(id, updatePositionDto, req.user);
+    return this.busesService.updatePosition(id, updatePositionDto, user);
   }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
+  @RequiresBusManagement()
   @ApiOperation({
     summary: 'Mettre à jour les détails du bus (Admin uniquement)',
     description:
@@ -204,13 +237,14 @@ export class BusesController {
   async update(
     @Param('id') id: string,
     @Body() updateBusDto: UpdateBusDto,
-    @Request() req,
+    @CurrentUser() user: CurrentUserData,
   ) {
-    return this.busesService.update(id, updateBusDto, req.user);
+    return this.busesService.update(id, updateBusDto, user);
   }
 
   @Delete(':id')
   @Roles(Role.ADMIN)
+  @RequiresBusManagement()
   @ApiOperation({
     summary: 'Supprimer un bus (Admin uniquement)',
     description: "Supprime un bus s'il n'a pas de trajets actifs",
@@ -227,7 +261,7 @@ export class BusesController {
   @ApiResponse({ status: 400, description: 'Bus avec trajets actifs' })
   @ApiResponse({ status: 403, description: 'Accès interdit' })
   @ApiResponse({ status: 404, description: 'Bus non trouvé' })
-  async remove(@Param('id') id: string, @Request() req) {
-    return this.busesService.remove(id, req.user);
+  async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserData) {
+    return this.busesService.remove(id, user);
   }
 }

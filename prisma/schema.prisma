@@ -155,7 +155,6 @@ model RoutePoint {
 }
 
 model Trip {
-
   id            Int        @id @default(autoincrement())
   routeId       Int
   busId         String

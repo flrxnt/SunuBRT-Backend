@@ -15,9 +15,9 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
   ParseEnumPipe,
+  UseInterceptors,
 } from '@nestjs/common';
 
-import { Request } from 'express';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -42,12 +42,26 @@ import {
   UpdateProfileDto,
 } from './dto/update-user.dto';
 import { UserEntity } from './entities/user.entity';
+import {
+  CurrentUser,
+  CurrentUserData,
+} from '../common/decorators/current-user.decorator';
+import { AccessLogInterceptor } from '../common/interceptors/access-log.interceptor';
+import { RoleCreationGuard } from '../common/guards/role-creation.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import {
+  RequiresUserManagement,
+  RequiresUserRead,
+  RequiresOwnResourceAccess,
+  RequiresAdminAccess,
+} from '../common/decorators/permissions.decorator';
 import { Role } from '@prisma/client';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(AuthGuard, RolesGuard)
+@UseGuards(AuthGuard, RolesGuard, PermissionsGuard)
+@UseInterceptors(AccessLogInterceptor)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -62,6 +76,8 @@ export class UsersController {
   @ApiBody({ type: CreateUserDto })
   @Post()
   @Roles(Role.ADMIN)
+  @UseGuards(AuthGuard, RolesGuard, RoleCreationGuard)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Body(ValidationPipe) createUserDto: CreateUserDto,
@@ -98,6 +114,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get()
   @Roles(Role.ADMIN)
+  @RequiresUserRead()
   @HttpCode(HttpStatus.OK)
   async findAll(
     @Query('page', new ParseIntPipe({ optional: true })) page?: number,
@@ -135,6 +152,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get('search')
   @Roles(Role.ADMIN)
+  @RequiresUserRead()
   @HttpCode(HttpStatus.OK)
   async searchUsers(
     @Query('q') query: string,
@@ -161,6 +179,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get('stats')
   @Roles(Role.ADMIN)
+  @RequiresAdminAccess()
   @HttpCode(HttpStatus.OK)
   async getUserStats() {
     const stats = await this.usersService.getUserStats();
@@ -178,6 +197,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get('by-role/:role')
   @Roles(Role.ADMIN)
+  @RequiresUserRead()
   @HttpCode(HttpStatus.OK)
   async findUsersByRole(
     @Param('role', new ParseEnumPipe(Role)) role: Role,
@@ -196,9 +216,10 @@ export class UsersController {
   @ApiOkResponse({ description: 'Profile retrieved successfully' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @Get('profile')
+  @RequiresOwnResourceAccess()
   @HttpCode(HttpStatus.OK)
-  async getProfile(@Req() req: Request & { user: { id: string } }) {
-    const user = await this.usersService.findById(req.user.id);
+  async getProfile(@CurrentUser() currentUser: CurrentUserData) {
+    const user = await this.usersService.findById(currentUser.id);
     if (!user) {
       throw new Error('User not found');
     }
@@ -217,6 +238,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get(':id')
   @Roles(Role.ADMIN)
+  @RequiresUserRead()
   @HttpCode(HttpStatus.OK)
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     const user = await this.usersService.findById(id);
@@ -239,12 +261,13 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Validation error' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @Patch('profile')
+  @RequiresOwnResourceAccess()
   @HttpCode(HttpStatus.OK)
   async updateProfile(
-    @Req() req: Request & { user: { id: string } },
+    @CurrentUser() currentUser: CurrentUserData,
     @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
   ): Promise<UpdateUserResponseDto> {
-    return this.usersService.updateProfile(req.user.id, updateProfileDto);
+    return this.usersService.updateProfile(currentUser.id, updateProfileDto);
   }
 
   @ApiOperation({ summary: 'Update a user (admin only)' })
@@ -255,6 +278,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Patch(':id')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -271,6 +295,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Patch(':id/verify')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async verifyUser(@Param('id', ParseUUIDPipe) id: string) {
     const user = await this.usersService.verifyUser(id);
@@ -289,6 +314,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Patch(':id/unverify')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async unverifyUser(@Param('id', ParseUUIDPipe) id: string) {
     const user = await this.usersService.unverifyUser(id);
@@ -314,6 +340,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Patch(':id/role')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async updateUserRole(
     @Param('id', ParseUUIDPipe) id: string,
@@ -337,6 +364,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Delete(':id')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.remove(id);
@@ -349,6 +377,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Get(':id/exists')
   @Roles(Role.ADMIN)
+  @RequiresUserRead()
   @HttpCode(HttpStatus.OK)
   async checkUserExists(@Param('id', ParseUUIDPipe) id: string) {
     const exists = await this.usersService.validateUserExists(id);
@@ -377,6 +406,8 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Post('bulk-create')
   @Roles(Role.ADMIN)
+  @UseGuards(AuthGuard, RolesGuard, RoleCreationGuard)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.CREATED)
   async bulkCreate(@Body() body: { users: CreateUserDto[] }) {
     const results: any[] = [];
@@ -436,6 +467,7 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden' })
   @Delete('bulk-delete')
   @Roles(Role.ADMIN)
+  @RequiresUserManagement()
   @HttpCode(HttpStatus.OK)
   async bulkDelete(@Body() body: { userIds: string[] }) {
     const results: any[] = [];
