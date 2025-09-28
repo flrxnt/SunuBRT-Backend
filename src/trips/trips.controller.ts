@@ -79,7 +79,6 @@ export class TripsController {
 
   @Get()
   @Public()
-  @Permissions(Permission.READ_TRIP)
   @ApiOperation({
     summary: 'Récupérer tous les trajets',
     description:
@@ -193,7 +192,6 @@ export class TripsController {
 
   @Get('search')
   @Public()
-  @Permissions(Permission.READ_TRIP)
   @ApiOperation({
     summary: 'Rechercher des trajets',
     description: 'Recherche des trajets par route, ligne, bus ou numéro de bus',
@@ -216,7 +214,6 @@ export class TripsController {
 
   @Get('route/:routeId')
   @Public()
-  @Permissions(Permission.READ_TRIP)
   @ApiOperation({
     summary: "Récupérer tous les trajets d'une route spécifique",
     description: "Récupère tous les trajets à venir d'une route donnée",
@@ -262,7 +259,6 @@ export class TripsController {
 
   @Get(':id')
   @Public()
-  @Permissions(Permission.READ_TRIP)
   @ApiOperation({
     summary: 'Récupérer un trajet par ID',
     description:

@@ -8,20 +8,35 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  password     String
-  firstName    String
-  lastName     String
-  phone        String?   @unique
-  role         Role      @default(USER)
-  isVerified   Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  driverBus    Bus?      @relation("DriverToBus")
-  payments     Payment[]
-  adminRefunds Refund[]  @relation("AdminRefunds")
-  tickets      Ticket[]
+  id String @id @default(uuid())
+
+  email String @unique
+
+  password String
+
+  firstName String
+
+  lastName String
+
+  phone String? @unique
+
+  role Role @default(USER)
+
+  isVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  driverBus Bus? @relation("DriverToBus")
+
+  payments Payment[]
+
+  adminRefunds Refund[] @relation("AdminRefunds")
+
+  tickets Ticket[]
+
+  validatedUsages TicketUsage[] @relation("UserValidatedUsages")
 
   @@map("users")
 }
@@ -43,22 +58,39 @@ model Line {
 }
 
 model Bus {
-  id              String    @id @default(cuid())
-  licensePlate    String    @unique
-  capacity        Int
-  model           String?
-  year            Int?
-  driverId        String    @unique
-  isActive        Boolean   @default(true)
-  passengersCount Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  busNumber       String    @unique
-  lineId          Int?
-  driver          User      @relation("DriverToBus", fields: [driverId], references: [id])
-  line            Line?     @relation(fields: [lineId], references: [id])
+  id String @id @default(cuid())
+
+  licensePlate String @unique
+
+  capacity Int
+
+  model String?
+
+  year Int?
+
+  driverId String @unique
+
+  isActive Boolean @default(true)
+
+  passengersCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  busNumber String @unique
+
+  lineId Int?
+
+  driver User @relation("DriverToBus", fields: [driverId], references: [id])
+
+  line Line? @relation(fields: [lineId], references: [id])
+
   currentPosition Position?
-  trips           Trip[]
+
+  trips Trip[]
+
+  usages TicketUsage[] @relation("BusUsages")
 
   @@map("buses")
 }
@@ -78,23 +110,27 @@ model Position {
 }
 
 model Route {
-  id            Int             @id @default(autoincrement())
-  name          String
-  startPointId  Int?
-  endPointId    Int?
-  distance      Float?
-  duration      Int?
-  description   String?
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  lineId        Int?
-  points        RoutePoint[]    @relation("RoutePoints")
-  endPoint      RoutePoint?     @relation("RouteEndPoint", fields: [endPointId], references: [id])
-  line          Line?           @relation(fields: [lineId], references: [id])
-  startPoint    RoutePoint?     @relation("RouteStartPoint", fields: [startPointId], references: [id])
+  id           Int          @id @default(autoincrement())
+  name         String
+  startPointId Int?
+  endPointId   Int?
+  distance     Float?
+  duration     Int?
+  description  String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  lineId       Int?
+  points       RoutePoint[] @relation("RoutePoints")
+  endPoint     RoutePoint?  @relation("RouteEndPoint", fields: [endPointId], references: [id])
+  line         Line?        @relation(fields: [lineId], references: [id])
+  startPoint   RoutePoint?  @relation("RouteStartPoint", fields: [startPointId], references: [id])
+
   ticketPricing TicketPricing[]
-  trips         Trip[]
+
+  trips Trip[]
+
+  usages TicketUsage[] @relation("RouteUsages")
 
   @@map("routes")
 }
@@ -128,9 +164,14 @@ model Trip {
   status         TripStatus @default(SCHEDULED)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
-  tickets        Ticket[]
-  bus            Bus        @relation(fields: [busId], references: [id])
-  route          Route      @relation(fields: [routeId], references: [id])
+
+  tickets Ticket[]
+
+  bus Bus @relation(fields: [busId], references: [id])
+
+  route Route @relation(fields: [routeId], references: [id])
+
+  usages TicketUsage[] @relation("TripUsages")
 
   @@map("trips")
 }
@@ -138,11 +179,12 @@ model Trip {
 model Ticket {
   id                 Int            @id @default(autoincrement())
   userId             String
-  tripId             Int
+  tripId             Int?
   seatNumber         String?
   qrCode             String         @unique
   status             TicketStatus   @default(PENDING)
   purchaseDate       DateTime       @default(now())
+  validFrom          DateTime?
   validUntil         DateTime?
   usedAt             DateTime?
   cancellationReason String?
@@ -152,17 +194,47 @@ model Ticket {
   pricingId          Int?
   validationLocation String?
   validationNotes    String?
+  ticketType         TicketType     @default(SINGLE_USE)
+  isReusable         Boolean        @default(false)
+  currentUsages      Int            @default(0)
+  maxUsages          Int?
   payment            Payment?
   pricing            TicketPricing? @relation(fields: [pricingId], references: [id])
-  trip               Trip           @relation(fields: [tripId], references: [id])
+  trip               Trip?          @relation(fields: [tripId], references: [id])
   user               User           @relation(fields: [userId], references: [id])
+  usages             TicketUsage[]  @relation("TicketUsages")
 
   @@map("tickets")
 }
 
+model TicketUsage {
+  id          Int      @id @default(autoincrement())
+  ticketId    Int
+  tripId      Int?
+  busId       String?
+  validatorId String?
+  routeId     Int?
+  usedAt      DateTime @default(now())
+  latitude    Float?
+  longitude   Float?
+  notes       String?
+
+  ticket Ticket @relation("TicketUsages", fields: [ticketId], references: [id], onDelete: Cascade)
+
+  trip Trip? @relation("TripUsages", fields: [tripId], references: [id])
+
+  bus Bus? @relation("BusUsages", fields: [busId], references: [id])
+
+  validator User? @relation("UserValidatedUsages", fields: [validatorId], references: [id])
+
+  route Route? @relation("RouteUsages", fields: [routeId], references: [id])
+
+  @@map("ticket_usages")
+}
+
 model Payment {
   id                   Int           @id @default(autoincrement())
-  ticketId             Int           @unique
+  ticketId             Int?          @unique
   userId               String
   amount               Float
   currency             String        @default("XOF")
@@ -188,7 +260,7 @@ model Payment {
   promoCode            String?
   provider             String        @default("PAYDUNYA")
   transactionReference String?
-  ticket               Ticket        @relation(fields: [ticketId], references: [id])
+  ticket               Ticket?       @relation(fields: [ticketId], references: [id])
   user                 User          @relation(fields: [userId], references: [id])
   refunds              Refund[]
 
@@ -266,6 +338,16 @@ enum TicketStatus {
   USED
   CANCELLED
   EXPIRED
+  ACTIVE
+  SUSPENDED
+}
+
+enum TicketType {
+  SINGLE_USE
+  DAILY_PASS
+  WEEKLY_PASS
+  MONTHLY_PASS
+  ANNUAL_PASS
 }
 
 enum PaymentStatus {

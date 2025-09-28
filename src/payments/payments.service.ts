@@ -371,28 +371,45 @@ export class PaymentsService {
       throw new NotFoundException('Utilisateur non trouvé');
     }
 
-    // Créer l'enregistrement de paiement en base sans ticketId
     const payment = await this.prisma.payment.create({
       data: {
-        userId,
+        user: { connect: { id: userId } },
+
         amount: finalPrice,
+
         originalAmount: basePrice,
+
         discountAmount: basePrice - finalPrice,
+
         currency,
+
         provider,
+
         paymentMethod,
+
         status: PaymentStatus.PENDING,
+
         customerName: customerName || `${user.firstName} ${user.lastName}`,
+
         customerEmail: customerEmail || user.email,
+
         customerPhone: customerPhone || user.phone,
+
         promoCode,
+
         customData: {
           tripId,
+
           pricingId,
+
           seatNumber,
+
           notes,
+
           routeName: trip.route.name,
+
           startTime: trip.startTime.toISOString(),
+
           busNumber: trip.bus.busNumber,
         },
       },
@@ -559,23 +576,38 @@ export class PaymentsService {
     }
 
     // Créer l'enregistrement de paiement en base
+
     const payment = await this.prisma.payment.create({
       data: {
-        ticketId,
-        userId,
+        ticket: { connect: { id: ticketId } },
+
+        user: { connect: { id: userId } },
+
         amount: finalAmount,
+
         originalAmount: ticket.trip.price,
+
         discountAmount,
+
         currency,
+
         provider,
+
         paymentMethod,
+
         status: PaymentStatus.PENDING,
+
         customerName:
           customerName || `${ticket.user.firstName} ${ticket.user.lastName}`,
+
         customerEmail: customerEmail || ticket.user.email,
+
         customerPhone: customerPhone || ticket.user.phone,
+
         notes,
+
         promoCode,
+
         customData: customData || {},
       },
     });

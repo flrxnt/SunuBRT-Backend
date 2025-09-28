@@ -72,7 +72,6 @@ export class RoutesController {
 
   @Get()
   @Public()
-  @Permissions(Permission.READ_ROUTE)
   @ApiOperation({
     summary: 'Récupérer toutes les routes',
     description:
@@ -153,7 +152,6 @@ export class RoutesController {
 
   @Get('search')
   @Public()
-  @Permissions(Permission.READ_ROUTE)
   @ApiOperation({
     summary: 'Rechercher des routes',
     description: 'Recherche des routes par nom, description ou ligne',
@@ -176,7 +174,6 @@ export class RoutesController {
 
   @Get('nearby')
   @Public()
-  @Permissions(Permission.READ_ROUTE)
   @ApiOperation({
     summary: "Trouver des routes proches d'une position GPS",
     description:
@@ -224,7 +221,6 @@ export class RoutesController {
 
   @Get('line/:lineId')
   @Public()
-  @Permissions(Permission.READ_ROUTE)
   @ApiOperation({
     summary: "Récupérer toutes les routes d'une ligne spécifique",
     description:
@@ -249,7 +245,6 @@ export class RoutesController {
 
   @Get(':id')
   @Public()
-  @Permissions(Permission.READ_ROUTE)
   @ApiOperation({
     summary: 'Récupérer une route par ID',
     description:

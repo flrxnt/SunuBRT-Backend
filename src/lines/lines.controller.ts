@@ -75,7 +75,6 @@ export class LinesController {
 
   @Get()
   @Public()
-  @Permissions(Permission.READ_LINE)
   @ApiOperation({
     summary: 'Récupérer toutes les lignes',
     description:
@@ -161,7 +160,6 @@ export class LinesController {
 
   @Get('search')
   @Public()
-  @Permissions(Permission.READ_LINE)
   @ApiOperation({
     summary: 'Rechercher des lignes',
     description: 'Recherche des lignes par nom, numéro ou description',
@@ -184,7 +182,6 @@ export class LinesController {
 
   @Get('number/:number')
   @Public()
-  @Permissions(Permission.READ_LINE)
   @ApiOperation({
     summary: 'Récupérer une ligne par numéro',
     description: "Récupère les détails d'une ligne par son numéro",
@@ -206,7 +203,6 @@ export class LinesController {
 
   @Get(':id')
   @Public()
-  @Permissions(Permission.READ_LINE)
   @ApiOperation({
     summary: 'Récupérer une ligne par ID',
     description: "Récupère les détails complets d'une ligne spécifique",
