@@ -48,9 +48,10 @@ model User {
   updatedAt   DateTime  @updatedAt
 
   // Relations
-  driverBus   Bus?      @relation("DriverToBus")
-  tickets     Ticket[]
-  payments    Payment[]
+  driverBus       Bus?      @relation("DriverToBus")
+  tickets         Ticket[]
+  payments        Payment[]
+  adminRefunds    Refund[]  @relation("AdminRefunds")
 
   @@map("users")
 }
@@ -68,6 +69,7 @@ model Line {
   // Relations
   buses       Bus[]
   routes      Route[]
+  ticketPricing TicketPricing[]
 
   @@map("lines")
 }
@@ -130,6 +132,7 @@ model Route {
   endPoint      RoutePoint? @relation("RouteEndPoint", fields: [endPointId], references: [id])
   trips         Trip[]
   points        RoutePoint[] @relation("RoutePoints")
+  ticketPricing TicketPricing[]
 
   @@map("routes")
 }
@@ -175,41 +178,138 @@ model Trip {
 }
 
 model Ticket {
-  id            Int          @id @default(autoincrement())
-  userId        String
-  tripId        Int
-  seatNumber    String?
-  qrCode        String       @unique
-  status        TicketStatus @default(PENDING)
-  purchaseDate  DateTime     @default(now())
-  validUntil    DateTime?
-  usedAt        DateTime?
+  id                  Int          @id @default(autoincrement())
+  userId              String
+  tripId              Int
+  seatNumber          String?
+  qrCode              String       @unique
+  status              TicketStatus @default(PENDING)
+  purchaseDate        DateTime     @default(now())
+  validUntil          DateTime?
+  usedAt              DateTime?
+  passengers          Int          @default(1)
+  notes               String?
+  validationNotes     String?
+  validationLocation  String?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  pricingId           Int?
 
   // Relations
   user          User         @relation(fields: [userId], references: [id])
   trip          Trip         @relation(fields: [tripId], references: [id])
+  pricing       TicketPricing? @relation(fields: [pricingId], references: [id])
   payment       Payment?
 
   @@map("tickets")
 }
 
 model Payment {
-  id                Int           @id @default(autoincrement())
-  ticketId          Int           @unique
-  userId            String
-  amount            Float
-  currency          String        @default("FCFA")
-  paydunyaToken     String?       @unique
-  paydunyaReference String?
-  status            PaymentStatus @default(PENDING)
-  paymentMethod     String?
-  paidAt            DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                    Int           @id @default(autoincrement())
+  ticketId              Int           @unique
+  userId                String
+  amount                Float
+  originalAmount        Float?
+  discountAmount        Float         @default(0)
+  currency              String        @default("XOF")
+  provider              String        @default("PAYDUNYA")
+  paymentMethod         String?
+  status                PaymentStatus @default(PENDING)
+
+  // Informations client
+  customerName          String?
+  customerEmail         String?
+  customerPhone         String?
+
+  // Références externes
+  externalToken         String?       @unique
+  externalReference     String?
+  transactionReference  String?
+  externalData          Json          @default("{}")
+
+  // Frais et montants nets
+  fees                  Float         @default(0)
+  netAmount             Float?
+
+  // Dates importantes
+  paidAt                DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Métadonnées
+  notes                 String?
+  promoCode             String?
+  cancellationReason    String?
+  customData            Json          @default("{}")
 
   // Relations
-  ticket            Ticket        @relation(fields: [ticketId], references: [id])
-  user              User          @relation(fields: [userId], references: [id])
+  ticket                Ticket        @relation(fields: [ticketId], references: [id])
+  user                  User          @relation(fields: [userId], references: [id])
+  refunds               Refund[]
 
   @@map("payments")
+}
+
+model TicketPricing {
+  id                  Int                 @id @default(autoincrement())
+  name                String
+  type                String              // STANDARD, EXPRESS, PREMIUM, STUDENT, etc.
+  price               Float
+  validityDuration    Int                 // Durée de validité
+  validityPeriodType  String              // HOURS, DAYS, WEEKS, MONTHS
+  lineId              Int?
+  routeId             Int?
+  description         String?
+  discountPercent     Float               @default(0)
+  validFrom           DateTime?
+  validTo             DateTime?
+  isActive            Boolean             @default(true)
+  maxTickets          Int?
+  specialConditions   String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  // Relations
+  line                Line?               @relation(fields: [lineId], references: [id])
+  route               Route?              @relation(fields: [routeId], references: [id])
+  tickets             Ticket[]
+
+  @@map("ticket_pricing")
+}
+
+model Refund {
+  id              Int       @id @default(autoincrement())
+  paymentId       Int
+  amount          Float
+  reason          String
+  adminNotes      String?
+  adminUserId     String
+  status          String    @default("PENDING") // PENDING, COMPLETED, FAILED, MANUAL
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  payment         Payment   @relation(fields: [paymentId], references: [id])
+  admin           User      @relation("AdminRefunds", fields: [adminUserId], references: [id])
+
+  @@map("refunds")
+}
+
+model PromoCode {
+  id              Int       @id @default(autoincrement())
+  code            String    @unique
+  name            String
+  description     String?
+  value           Float     // Montant ou pourcentage
+  isPercentage    Boolean   @default(false)
+  maxUses         Int?
+  currentUses     Int       @default(0)
+  isActive        Boolean   @default(true)
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("promo_codes")
 }

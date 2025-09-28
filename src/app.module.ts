@@ -10,6 +10,8 @@ import { BusesModule } from './buses/buses.module';
 import { RoutesModule } from './routes/routes.module';
 import { LinesModule } from './lines/lines.module';
 import { TripsModule } from './trips/trips.module';
+import { PaymentsModule } from './payments/payments.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { TripsModule } from './trips/trips.module';
     RoutesModule,
     LinesModule,
     TripsModule,
+    PaymentsModule,
+    TicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
