@@ -30,6 +30,12 @@ export enum Permission {
   UPDATE_LINE = 'update:line',
   DELETE_LINE = 'delete:line',
 
+  // Route permissions
+  CREATE_ROUTE = 'create:route',
+  READ_ROUTE = 'read:route',
+  UPDATE_ROUTE = 'update:route',
+  DELETE_ROUTE = 'delete:route',
+
   // Trip permissions
   CREATE_TRIP = 'create:trip',
   READ_TRIP = 'read:trip',
@@ -64,6 +70,7 @@ export const RolePermissions = {
   USER: [
     Permission.READ_BUS,
     Permission.READ_LINE,
+    Permission.READ_ROUTE,
     Permission.READ_TRIP,
     Permission.CREATE_TICKET,
     Permission.READ_OWN_TICKET,
@@ -76,6 +83,7 @@ export const RolePermissions = {
     // Permissions des utilisateurs
     Permission.READ_BUS,
     Permission.READ_LINE,
+    Permission.READ_ROUTE,
     Permission.READ_TRIP,
     Permission.CREATE_TICKET,
     Permission.READ_OWN_TICKET,
@@ -86,7 +94,7 @@ export const RolePermissions = {
     // Permissions spécifiques aux conducteurs
     Permission.READ_OWN_BUS,
     Permission.UPDATE_OWN_BUS_POSITION,
-    Permission.READ_TRIP,
+    Permission.UPDATE_TRIP,
   ],
   ADMIN: [
     // Toutes les permissions
@@ -141,3 +149,30 @@ export const RequiresAdminAccess = () =>
 
 export const RequiresOwnResourceAccess = () =>
   Permissions(Permission.READ_OWN_PROFILE, Permission.UPDATE_OWN_PROFILE);
+
+export const RequiresLineManagement = () =>
+  Permissions(
+    Permission.CREATE_LINE,
+    Permission.UPDATE_LINE,
+    Permission.DELETE_LINE,
+  );
+
+export const RequiresLineRead = () => Permissions(Permission.READ_LINE);
+
+export const RequiresRouteManagement = () =>
+  Permissions(
+    Permission.CREATE_ROUTE,
+    Permission.UPDATE_ROUTE,
+    Permission.DELETE_ROUTE,
+  );
+
+export const RequiresRouteRead = () => Permissions(Permission.READ_ROUTE);
+
+export const RequiresTripManagement = () =>
+  Permissions(
+    Permission.CREATE_TRIP,
+    Permission.UPDATE_TRIP,
+    Permission.DELETE_TRIP,
+  );
+
+export const RequiresTripRead = () => Permissions(Permission.READ_TRIP);

@@ -21,9 +21,31 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "paths": {
-      "src/*": ["src/*"]
-    }
+      "src/*": [
+        "src/*"
+      ]
+    },
   },
-  "include": ["src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "dist", "coverage"]
+  "watchOptions": {
+    "watchFile": "dynamicPriorityPolling",
+    "watchDirectory": "dynamicPriorityPolling",
+    "fallbackPolling": "dynamicpriority",
+    "synchronousWatchDirectory": true,
+    "excludeDirectories": [
+      "node_modules",
+      "dist",
+      ".git",
+      "coverage"
+    ],
+    "excludeFiles": []
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage"
+  ]
 }
