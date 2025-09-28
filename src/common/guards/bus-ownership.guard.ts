@@ -44,7 +44,7 @@ export class BusOwnershipGuard implements CanActivate {
     if (user.role === Role.DRIVER) {
       if (bus.driverId !== user.id) {
         throw new ForbiddenException(
-          'Vous ne pouvez accéder qu\'à votre propre bus',
+          "Vous ne pouvez accéder qu'à votre propre bus",
         );
       }
       return true;

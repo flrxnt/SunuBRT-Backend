@@ -20,7 +20,9 @@ export class RoleCreationGuard implements CanActivate {
 
     // Seuls les admins peuvent créer des utilisateurs
     if (user.role !== Role.ADMIN) {
-      throw new ForbiddenException('Seuls les administrateurs peuvent créer des utilisateurs');
+      throw new ForbiddenException(
+        'Seuls les administrateurs peuvent créer des utilisateurs',
+      );
     }
 
     // Validation des rôles lors de la création
