@@ -46,7 +46,7 @@ type AuthenticatedRequest = Request & {
 };
 
 @ApiTags('Payments')
-@Controller('api/v1/payments')
+@Controller('payments')
 @UseGuards(AuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class PaymentsController {

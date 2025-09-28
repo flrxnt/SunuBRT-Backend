@@ -237,12 +237,9 @@ export class TicketsService {
     // Pour les abonnements, créer un nouveau ticket
     if (
       ticketType &&
-      [
-        TicketType.DAILY_PASS,
-        TicketType.WEEKLY_PASS,
-        TicketType.MONTHLY_PASS,
-        TicketType.ANNUAL_PASS,
-      ].includes(ticketType as TicketType)
+      ['DAILY_PASS', 'WEEKLY_PASS', 'MONTHLY_PASS', 'ANNUAL_PASS'].includes(
+        ticketType,
+      )
     ) {
       return await this.createSubscriptionTicket(
         {
@@ -706,7 +703,7 @@ export class TicketsService {
       };
     }
 
-    if (![TicketStatus.PAID, TicketStatus.ACTIVE].includes(ticket.status)) {
+    if (!['PAID', 'ACTIVE'].includes(ticket.status)) {
       return {
         isValid: false,
         message: "Ce ticket n'est pas valide",
@@ -865,7 +862,7 @@ export class TicketsService {
       data: {
         currentUsages: ticket.currentUsages + 1,
         // Marquer comme utilisé seulement si c'est un ticket à usage unique
-        status: !ticket.isReusable ? TicketStatus.USED : ticket.status,
+        status: !ticket.isReusable ? TicketStatus.EXPIRED : ticket.status,
       },
       include: {
         trip: {
@@ -1312,7 +1309,7 @@ export class TicketsService {
         where: { ...where, status: TicketStatus.PAID },
       }),
       this.prisma.ticket.count({
-        where: { ...where, status: TicketStatus.USED },
+        where: { ...where, status: TicketStatus.EXPIRED },
       }),
       this.prisma.ticket.count({
         where: { ...where, status: TicketStatus.CANCELLED },
@@ -1380,6 +1377,12 @@ export class TicketsService {
             paidAt: true,
           },
         },
+        usages: {
+          orderBy: {
+            usedAt: 'desc',
+          },
+          take: 5,
+        },
       },
     });
 
@@ -1422,7 +1425,7 @@ export class TicketsService {
           status: ticket.payment?.status,
           paidAt: ticket.payment?.paidAt,
         },
-        recentUsages: ticket.usages?.slice(0, 5) || [],
+        recentUsages: ticket.usages || [],
       },
     };
   }
@@ -1587,7 +1590,7 @@ export class TicketsService {
 
       // Utilisations par type de ticket
       this.prisma.ticketUsage.groupBy({
-        by: ['ticket'],
+        by: ['ticketId'],
         where: whereClause,
         _count: { id: true },
       }),

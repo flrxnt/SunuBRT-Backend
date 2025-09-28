@@ -34,7 +34,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 
 @ApiTags('Bus Tracking')
-@Controller('api/v1/tracking')
+@Controller('tracking')
 @UseGuards(AuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class TrackingController {

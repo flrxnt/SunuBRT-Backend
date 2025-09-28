@@ -65,7 +65,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @ApiTags('Tickets')
-@Controller('api/v1/tickets')
+@Controller('tickets')
 @UseGuards(AuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class TicketsController {
@@ -989,8 +989,8 @@ export class TicketsController {
   @ApiResponse({ status: 404, description: 'Abonnement non trouvé' })
   async toggleSubscriptionSuspension(
     @Param('id', ParseIntPipe) ticketId: number,
-    @Body('reason') reason?: string,
     @Req() req: AuthenticatedRequest,
+    @Body('reason') reason?: string,
   ) {
     return await this.ticketsService.toggleTicketSuspension(
       ticketId,

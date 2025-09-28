@@ -981,7 +981,7 @@ export class PaymentsService {
     }
 
     // Vérifier si le ticket peut être remboursé
-    if (payment.ticket.status === TicketStatus.USED) {
+    if (payment.ticket.status === TicketStatus.EXPIRED) {
       throw new BadRequestException(
         'Impossible de rembourser un ticket déjà utilisé',
       );
