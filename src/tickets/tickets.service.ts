@@ -4,9 +4,15 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import {
+  InitiateTicketPurchaseDto,
+  GetAvailablePricingDto,
+  PurchaseResponseDto,
+} from './dto/purchase-ticket.dto';
 import {
   ValidateTicketDto,
   TicketValidationResponseDto,
@@ -17,32 +23,33 @@ import {
   TicketPricingType,
   ValidityPeriodType,
 } from './dto/ticket-pricing.dto';
-import { TicketStatus, Role, TripStatus } from '@prisma/client';
+import { TicketStatus, Role, TripStatus, PaymentStatus } from '@prisma/client';
 import { WebsocketsGateway } from '../websockets/websockets.gateway';
+import { PaymentsService } from '../payments/payments.service';
 import * as QRCode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(
-    private prisma: PrismaService,
-    private websocketsGateway: WebsocketsGateway,
+    private readonly prisma: PrismaService,
+    private readonly paymentsService: PaymentsService,
+    private readonly websocketsGateway: WebsocketsGateway,
   ) {}
 
   // ===============================
   // GESTION DES TICKETS
   // ===============================
 
-  async create(createTicketDto: CreateTicketDto, userId: string) {
-    const {
-      tripId,
-      seatNumber,
-      validUntil,
-      passengers = 1,
-      notes,
-    } = createTicketDto;
+  /**
+   * Nouvelle méthode pour obtenir les tarifications disponibles pour un voyage
+   */
+  async getAvailablePricing(dto: GetAvailablePricingDto, userId?: string) {
+    const { tripId } = dto;
 
-    // Vérifier que le voyage existe et est disponible
+    // Vérifier que le voyage existe
     const trip = await this.prisma.trip.findUnique({
       where: { id: tripId },
       include: {
@@ -52,13 +59,6 @@ export class TicketsService {
           },
         },
         bus: true,
-        tickets: {
-          where: {
-            status: {
-              in: [TicketStatus.PAID, TicketStatus.PENDING],
-            },
-          },
-        },
       },
     });
 
@@ -67,60 +67,170 @@ export class TicketsService {
     }
 
     if (trip.status !== TripStatus.SCHEDULED) {
-      throw new BadRequestException(
-        "Ce voyage n'est plus disponible à la réservation",
-      );
+      throw new BadRequestException("Ce voyage n'est plus disponible");
     }
 
-    // Vérifier la disponibilité des places
-    const occupiedSeats = trip.tickets.reduce(
-      (total, ticket) => total + (ticket.passengers || 1),
-      0,
-    );
-    if (occupiedSeats + passengers > trip.availableSeats) {
-      throw new BadRequestException(
-        `Pas assez de places disponibles. Places restantes: ${trip.availableSeats - occupiedSeats}`,
-      );
-    }
+    // Récupérer toutes les tarifications applicables
+    const pricingOptions = await this.prisma.ticketPricing.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { routeId: trip.routeId },
+          { lineId: trip.route.lineId },
+          { AND: [{ routeId: null }, { lineId: null }] }, // tarification générale
+        ],
+        AND: [
+          {
+            OR: [{ validFrom: null }, { validFrom: { lte: new Date() } }],
+          },
+          {
+            OR: [{ validTo: null }, { validTo: { gte: new Date() } }],
+          },
+        ],
+      },
+      orderBy: [
+        { routeId: 'desc' }, // priorité aux tarifs spécifiques à la route
+        { lineId: 'desc' }, // puis à la ligne
+        { price: 'asc' }, // puis par prix croissant
+      ],
+    });
 
-    // Vérifier si le siège spécifique est disponible
-    if (seatNumber) {
-      const existingSeat = await this.prisma.ticket.findFirst({
-        where: {
-          tripId,
-          seatNumber,
-          status: { in: [TicketStatus.PAID, TicketStatus.PENDING] },
-        },
-      });
+    return pricingOptions.map((pricing) => ({
+      id: pricing.id,
+      name: pricing.name,
+      type: pricing.type,
+      description: pricing.description,
+      originalPrice: pricing.price,
+      finalPrice: Math.round(
+        pricing.price * (1 - pricing.discountPercent / 100),
+      ),
+      totalPrice: Math.round(
+        pricing.price * (1 - pricing.discountPercent / 100),
+      ),
+      discountPercent: pricing.discountPercent,
+      validityDuration: pricing.validityDuration,
+      validityPeriodType: pricing.validityPeriodType,
+      specialConditions: pricing.specialConditions,
+      maxTickets: pricing.maxTickets,
+    }));
+  }
 
-      if (existingSeat) {
-        throw new ConflictException(`Le siège ${seatNumber} est déjà pris`);
-      }
-    }
+  /**
+   * Nouvelle méthode pour initier l'achat d'un ticket avec paiement
+   */
+  async initiateTicketPurchase(
+    dto: InitiateTicketPurchaseDto,
+    userId: string,
+  ): Promise<PurchaseResponseDto> {
+    const {
+      tripId,
+      pricingId,
+      seatNumber,
+      notes,
+      provider,
+      paymentMethod,
+      customerName,
+      customerEmail,
+      customerPhone,
+      promoCode,
+    } = dto;
 
-    // Obtenir la tarification applicable
-    const pricing = await this.getApplicablePricing(tripId);
-
-    // Calculer la date de validité
-    const calculatedValidUntil = validUntil
-      ? new Date(validUntil)
-      : this.calculateValidityDate(pricing);
-
-    // Générer un code QR unique
-    const qrCode = `SUNUBRT-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
-
-    // Créer le ticket
-    const ticket = await this.prisma.ticket.create({
-      data: {
-        userId,
+    // Créer directement le paiement de ticket qui gérera la création du ticket après paiement réussi
+    const paymentResult = await this.paymentsService.createTicketPayment(
+      {
         tripId,
+        pricingId,
         seatNumber,
-        qrCode,
-        status: TicketStatus.PENDING,
-        validUntil: calculatedValidUntil,
-        passengers,
         notes,
-        purchaseDate: new Date(),
+        provider,
+        paymentMethod,
+        customerName,
+        customerEmail,
+        customerPhone,
+        promoCode,
+      },
+      userId,
+    );
+
+    return paymentResult;
+  }
+
+  /**
+   * Méthode pour créer un ticket après paiement confirmé
+   */
+  async create(createTicketDto: CreateTicketDto, userId: string) {
+    const { paymentId, seatNumber, notes } = createTicketDto;
+
+    // Vérifier que le paiement existe et est confirmé
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        ticket: {
+          include: {
+            trip: {
+              include: {
+                route: {
+                  include: {
+                    line: true,
+                  },
+                },
+                bus: {
+                  include: {
+                    driver: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        phone: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            pricing: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Paiement non trouvé');
+    }
+
+    if (payment.userId !== userId) {
+      throw new BadRequestException('Ce paiement ne vous appartient pas');
+    }
+
+    if (payment.status !== PaymentStatus.COMPLETED) {
+      throw new BadRequestException("Le paiement n'est pas encore confirmé");
+    }
+
+    if (!payment.ticket) {
+      throw new NotFoundException('Ticket associé au paiement non trouvé');
+    }
+
+    // Vérifier que le ticket n'est pas déjà activé
+    if (payment.ticket.status === TicketStatus.PAID) {
+      throw new BadRequestException('Ce ticket est déjà activé');
+    }
+
+    // Mettre à jour le ticket avec les nouvelles informations et statut PAID
+    const updatedTicket = await this.prisma.ticket.update({
+      where: { id: payment.ticket.id },
+      data: {
+        status: TicketStatus.PAID,
+        seatNumber: seatNumber || payment.ticket.seatNumber,
+        notes: notes || payment.ticket.notes,
       },
       include: {
         trip: {
@@ -144,6 +254,7 @@ export class TicketsService {
             },
           },
         },
+        pricing: true,
         user: {
           select: {
             id: true,
@@ -158,17 +269,21 @@ export class TicketsService {
 
     // Envoyer notification WebSocket
     if (this.websocketsGateway) {
-      this.websocketsGateway.emitToUser(userId, 'ticket:created', {
-        ticketId: ticket.id,
+      this.websocketsGateway.emitToUser(userId, 'ticket:paid', {
+        ticketId: updatedTicket.id,
         tripInfo: {
-          routeName: ticket.trip.route.name,
-          startTime: ticket.trip.startTime,
-          busNumber: ticket.trip.bus.busNumber,
+          routeName: updatedTicket.trip.route.name,
+          startTime: updatedTicket.trip.startTime,
+          busNumber: updatedTicket.trip.bus.busNumber,
         },
       });
     }
 
-    return ticket;
+    this.logger.log(
+      `Ticket ${updatedTicket.id} activé après paiement confirmé`,
+    );
+
+    return updatedTicket;
   }
 
   async findUserTickets(
@@ -303,7 +418,7 @@ export class TicketsService {
         tripId: ticket.tripId,
         qrCode: ticket.qrCode,
         validUntil: ticket.validUntil,
-        passengers: ticket.passengers || 1,
+        passengers: 1,
         generatedAt: new Date().toISOString(),
       });
 
@@ -931,7 +1046,7 @@ export class TicketsService {
         qrCode: ticket.qrCode,
         status: ticket.status,
         seatNumber: ticket.seatNumber,
-        passengers: ticket.passengers || 1,
+        passengers: 1,
         purchaseDate: ticket.purchaseDate,
         validUntil: ticket.validUntil,
         usedAt: ticket.usedAt,

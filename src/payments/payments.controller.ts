@@ -5,13 +5,13 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   UseGuards,
   Query,
   Request,
   HttpStatus,
   ParseIntPipe,
   HttpCode,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,11 +24,11 @@ import {
 import { PaymentsService } from './payments.service';
 import {
   CreatePaymentDto,
+  CreateTicketPaymentDto,
   PaymentProvider,
   PaymentMethod,
   RefundPaymentDto,
   VerifyPaymentDto,
-  PaymentStatisticsDto,
 } from './dto/create-payment.dto';
 import {
   PaydunyaCallbackDto,
@@ -40,6 +40,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role, PaymentStatus } from '@prisma/client';
+
+type AuthenticatedRequest = Request & {
+  user: { sub: string } & Record<string, unknown>;
+};
 
 @ApiTags('Payments')
 @Controller('api/v1/payments')
@@ -95,11 +99,89 @@ export class PaymentsController {
     status: HttpStatus.CONFLICT,
     description: 'Paiement déjà existant pour ce ticket',
   })
+  @Post('ticket')
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary: 'Créer un paiement pour un nouveau ticket',
+    description:
+      'Initie un paiement pour un ticket qui sera créé automatiquement après paiement réussi',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Paiement de ticket créé avec succès',
+    schema: {
+      type: 'object',
+      properties: {
+        paymentId: { type: 'number', example: 123 },
+        paymentUrl: {
+          type: 'string',
+          example:
+            'https://app.paydunya.com/sandbox-checkout/checkout-invoice/token123',
+        },
+        paymentToken: { type: 'string', example: 'paydunya_token_abc123' },
+        amount: { type: 'number', example: 500 },
+        currency: { type: 'string', example: 'XOF' },
+        status: { type: 'string', example: 'PENDING' },
+        tripInfo: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            routeName: { type: 'string' },
+            startTime: { type: 'string' },
+            busNumber: { type: 'string' },
+            availableSeats: { type: 'number' },
+          },
+        },
+        pricingInfo: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            name: { type: 'string' },
+            type: { type: 'string' },
+            originalPrice: { type: 'number' },
+            finalPrice: { type: 'number' },
+            discountPercent: { type: 'number' },
+            validityDuration: { type: 'number' },
+            validityPeriodType: { type: 'string' },
+          },
+        },
+        reservedSeat: { type: 'string', nullable: true },
+        reservationValidityMinutes: { type: 'number' },
+        reservationExpiresAt: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Données de paiement invalides',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Voyage ou tarification non trouvé(e)',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Siège déjà pris',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Erreur interne du serveur',
+  })
+  async createTicketPayment(
+    @Body() createTicketPaymentDto: CreateTicketPaymentDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.paymentsService.createTicketPayment(
+      createTicketPaymentDto,
+      req.user.sub,
+    );
+  }
+
   async create(
     @Body() createPaymentDto: CreatePaymentDto,
-    @CurrentUser() user: any,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.paymentsService.createPayment(createPaymentDto, user.sub);
+    return this.paymentsService.createPayment(createPaymentDto, req.user.sub);
   }
 
   @Get('my-payments')

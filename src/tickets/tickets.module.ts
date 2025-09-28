@@ -3,9 +3,10 @@ import { TicketsService } from './tickets.service';
 import { TicketsController } from './tickets.controller';
 import { PrismaService } from '../database/prisma.service';
 import { WebsocketsModule } from '../websockets/websockets.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
-  imports: [WebsocketsModule],
+  imports: [WebsocketsModule, PaymentsModule],
   controllers: [TicketsController],
   providers: [TicketsService, PrismaService],
   exports: [TicketsService],

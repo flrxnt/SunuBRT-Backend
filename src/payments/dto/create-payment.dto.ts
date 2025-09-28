@@ -8,7 +8,6 @@ import {
   IsEmail,
   IsPhoneNumber,
   Min,
-  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -30,15 +29,133 @@ export enum PaymentMethod {
   CASH = 'CASH',
 }
 
-export class CreatePaymentDto {
+export class CreateTicketPaymentDto {
   @ApiProperty({
-    description: 'ID du ticket à payer',
+    description: 'ID du voyage pour lequel acheter le ticket',
     example: 1,
   })
-  @IsNotEmpty({ message: "L'ID du ticket est requis" })
+  @IsNotEmpty({ message: "L'ID du voyage est requis" })
+  @IsNumber({}, { message: "L'ID du voyage doit être un nombre" })
+  @Type(() => Number)
+  tripId: number;
+
+  @ApiProperty({
+    description: 'ID de la tarification choisie',
+    example: 1,
+  })
+  @IsNotEmpty({ message: 'La tarification est requise' })
+  @IsNumber({}, { message: "L'ID de tarification doit être un nombre" })
+  @Type(() => Number)
+  pricingId: number;
+
+  @ApiPropertyOptional({
+    description: 'Numéro de siège souhaité (optionnel)',
+    example: 'A15',
+  })
+  @IsOptional()
+  @IsString({ message: 'Le numéro de siège doit être une chaîne' })
+  seatNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'Notes additionnelles pour le ticket',
+    example: 'Voyage pour rendez-vous médical',
+  })
+  @IsOptional()
+  @IsString({ message: 'Les notes doivent être une chaîne' })
+  notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Fournisseur de paiement préféré',
+    enum: PaymentProvider,
+    example: PaymentProvider.PAYDUNYA,
+    default: PaymentProvider.PAYDUNYA,
+  })
+  @IsOptional()
+  @IsEnum(PaymentProvider, {
+    message: 'Le fournisseur de paiement doit être une valeur valide',
+  })
+  provider?: PaymentProvider = PaymentProvider.PAYDUNYA;
+
+  @ApiPropertyOptional({
+    description: 'Méthode de paiement',
+    enum: PaymentMethod,
+    example: PaymentMethod.MOBILE_MONEY,
+  })
+  @IsOptional()
+  @IsEnum(PaymentMethod, {
+    message: 'La méthode de paiement doit être une valeur valide',
+  })
+  paymentMethod?: PaymentMethod;
+
+  @ApiPropertyOptional({
+    description: 'Nom du client pour la facture',
+    example: 'Amadou Diallo',
+  })
+  @IsOptional()
+  @IsString({ message: 'Le nom du client doit être une chaîne' })
+  customerName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Email du client pour la facture',
+    example: 'amadou.diallo@example.com',
+  })
+  @IsOptional()
+  @IsEmail({}, { message: 'Veuillez fournir un email valide' })
+  customerEmail?: string;
+
+  @ApiPropertyOptional({
+    description: 'Téléphone du client pour la facture',
+    example: '+221701234567',
+  })
+  @IsOptional()
+  @IsPhoneNumber('SN', {
+    message: 'Veuillez fournir un numéro de téléphone sénégalais valide',
+  })
+  customerPhone?: string;
+
+  @ApiPropertyOptional({
+    description: 'URL de retour après paiement réussi',
+    example: 'https://app.sunubrt.com/payment/success',
+  })
+  @IsOptional()
+  @IsUrl({}, { message: "L'URL de retour doit être valide" })
+  returnUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'URL de retour après annulation du paiement',
+    example: 'https://app.sunubrt.com/payment/cancel',
+  })
+  @IsOptional()
+  @IsUrl({}, { message: "L'URL d'annulation doit être valide" })
+  cancelUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Code de promotion à appliquer',
+    example: 'NOEL2024',
+  })
+  @IsOptional()
+  @IsString({ message: 'Le code promotion doit être une chaîne' })
+  promoCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'Devise du paiement',
+    example: 'XOF',
+    default: 'XOF',
+  })
+  @IsOptional()
+  @IsString({ message: 'La devise doit être une chaîne' })
+  currency?: string = 'XOF';
+}
+
+export class CreatePaymentDto {
+  @ApiPropertyOptional({
+    description: 'ID du ticket à payer (optionnel pour rétrocompatibilité)',
+    example: 1,
+  })
+  @IsOptional()
   @IsNumber({}, { message: "L'ID du ticket doit être un nombre" })
   @Type(() => Number)
-  ticketId: number;
+  ticketId?: number;
 
   @ApiPropertyOptional({
     description: 'Fournisseur de paiement préféré',

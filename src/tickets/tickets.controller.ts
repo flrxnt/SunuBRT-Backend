@@ -8,9 +8,11 @@ import {
   Delete,
   UseGuards,
   Query,
-  Request,
   HttpStatus,
+  BadRequestException,
+  NotFoundException,
   ParseIntPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,18 +24,24 @@ import {
 } from '@nestjs/swagger';
 import { TicketsService } from './tickets.service';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   ValidateTicketDto,
   TicketValidationResponseDto,
   ScanTicketDto,
 } from './dto/validate-ticket.dto';
 import {
+  InitiateTicketPurchaseDto,
+  GetAvailablePricingDto,
+  PurchaseResponseDto,
+} from './dto/purchase-ticket.dto';
+import {
   CreateTicketPricingDto,
   UpdateTicketPricingDto,
-  TicketPricingType,
-  ApplyDiscountDto,
   BulkUpdatePricingDto,
+  ApplyDiscountDto,
 } from './dto/ticket-pricing.dto';
+import { TicketPricingType } from './dto/ticket-pricing.dto';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -52,26 +60,81 @@ export class TicketsController {
   // ENDPOINTS TICKETS
   // ===============================
 
-  @Post()
+  @Get('pricing/:tripId')
   @ApiOperation({
-    summary: 'Créer un nouveau ticket',
-    description: 'Permet à un utilisateur de créer un ticket pour un voyage',
+    summary: 'Obtenir les tarifications disponibles pour un voyage',
+    description:
+      'Récupère toutes les tarifications applicables à un voyage donné',
+  })
+  @ApiParam({
+    name: 'tripId',
+    description: 'ID du voyage',
+    type: 'number',
+  })
+  @ApiQuery({
+    name: 'passengers',
+    required: false,
+    description: 'Nombre de passagers (défaut: 1)',
+    type: 'number',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Liste des tarifications disponibles',
+  })
+  async getAvailablePricing(
+    @Param('tripId', ParseIntPipe) tripId: number,
+    @Query('passengers', new DefaultValuePipe(1), ParseIntPipe)
+    passengers: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.ticketsService.getAvailablePricing(
+      { tripId, passengers },
+      user.sub,
+    );
+  }
+
+  @Post('purchase')
+  @ApiOperation({
+    summary: "Initier l'achat d'un ticket avec paiement",
+    description:
+      "Démarre le processus d'achat d'un ticket en créant un paiement",
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Ticket créé avec succès',
+    description: 'Achat initié avec succès',
+    type: PurchaseResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Données invalides ou voyage indisponible',
+    description: 'Données invalides ou voyage/tarification indisponible',
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Voyage non trouvé',
+    description: 'Voyage ou tarification non trouvé',
+  })
+  async initiateTicketPurchase(
+    @Body() purchaseDto: InitiateTicketPurchaseDto,
+    @CurrentUser() user: any,
+  ): Promise<PurchaseResponseDto> {
+    return this.ticketsService.initiateTicketPurchase(purchaseDto, user.sub);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Créer un ticket après paiement confirmé',
+    description: 'Active un ticket après confirmation du paiement',
   })
   @ApiResponse({
-    status: HttpStatus.CONFLICT,
-    description: 'Siège déjà pris ou pas assez de places',
+    status: HttpStatus.CREATED,
+    description: 'Ticket créé et activé avec succès',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Paiement non confirmé ou données invalides',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Paiement non trouvé',
   })
   async create(
     @Body() createTicketDto: CreateTicketDto,

@@ -187,7 +187,7 @@ model Ticket {
   purchaseDate        DateTime     @default(now())
   validUntil          DateTime?
   usedAt              DateTime?
-  passengers          Int          @default(1)
+
   notes               String?
   validationNotes     String?
   validationLocation  String?
@@ -206,7 +206,7 @@ model Ticket {
 
 model Payment {
   id                    Int           @id @default(autoincrement())
-  ticketId              Int           @unique
+  ticketId              Int?          @unique
   userId                String
   amount                Float
   originalAmount        Float?
@@ -244,7 +244,7 @@ model Payment {
   customData            Json          @default("{}")
 
   // Relations
-  ticket                Ticket        @relation(fields: [ticketId], references: [id])
+  ticket                Ticket?       @relation(fields: [ticketId], references: [id])
   user                  User          @relation(fields: [userId], references: [id])
   refunds               Refund[]
 

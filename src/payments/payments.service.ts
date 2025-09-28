@@ -10,6 +10,7 @@ import { PrismaService } from '../database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import {
   CreatePaymentDto,
+  CreateTicketPaymentDto,
   PaymentProvider,
   PaymentMethod,
 } from './dto/create-payment.dto';
@@ -248,6 +249,244 @@ export class PaymentsService {
     // this.providers.set(PaymentProvider.WAVE, new WaveProvider());
   }
 
+  async createTicketPayment(
+    createTicketPaymentDto: CreateTicketPaymentDto,
+    userId: string,
+  ) {
+    const {
+      tripId,
+      pricingId,
+      seatNumber,
+      notes,
+      provider = PaymentProvider.PAYDUNYA,
+      paymentMethod,
+      customerName,
+      customerEmail,
+      customerPhone,
+      returnUrl,
+      cancelUrl,
+      promoCode,
+      currency = 'XOF',
+    } = createTicketPaymentDto;
+
+    // Vérifier que le voyage existe et est disponible
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        route: {
+          include: {
+            line: true,
+          },
+        },
+        bus: true,
+        tickets: {
+          where: {
+            status: {
+              in: [TicketStatus.PAID, TicketStatus.PENDING],
+            },
+          },
+        },
+      },
+    });
+
+    if (!trip) {
+      throw new NotFoundException('Voyage non trouvé');
+    }
+
+    if (trip.status !== 'SCHEDULED') {
+      throw new BadRequestException(
+        "Ce voyage n'est plus disponible à la réservation",
+      );
+    }
+
+    // Vérifier la disponibilité des places (1 seul passager par ticket)
+    const occupiedSeats = trip.tickets.length;
+    if (occupiedSeats >= trip.availableSeats) {
+      throw new BadRequestException(
+        `Pas de places disponibles. Places restantes: ${trip.availableSeats - occupiedSeats}`,
+      );
+    }
+
+    // Vérifier si le siège spécifique est disponible
+    if (seatNumber) {
+      const existingSeat = await this.prisma.ticket.findFirst({
+        where: {
+          tripId,
+          seatNumber,
+          status: { in: [TicketStatus.PAID, TicketStatus.PENDING] },
+        },
+      });
+
+      if (existingSeat) {
+        throw new ConflictException(`Le siège ${seatNumber} est déjà pris`);
+      }
+    }
+
+    // Vérifier que la tarification existe et est applicable
+    const pricing = await this.prisma.ticketPricing.findUnique({
+      where: { id: pricingId },
+    });
+
+    if (!pricing || !pricing.isActive) {
+      throw new NotFoundException('Tarification non trouvée ou inactive');
+    }
+
+    // Vérifier que la tarification est applicable à ce voyage
+    const isPricingApplicable =
+      (!pricing.routeId && !pricing.lineId) || // tarification générale
+      pricing.routeId === trip.routeId || // tarification pour cette route
+      pricing.lineId === trip.route.lineId; // tarification pour cette ligne
+
+    if (!isPricingApplicable) {
+      throw new BadRequestException(
+        "Cette tarification n'est pas applicable à ce voyage",
+      );
+    }
+
+    // Calculer le prix final
+    const basePrice = pricing.price;
+    const discountAmount = Math.round(
+      (basePrice * pricing.discountPercent) / 100,
+    );
+    let finalPrice = basePrice - discountAmount;
+
+    // Appliquer le code promo si fourni
+    if (promoCode) {
+      const discount = await this.applyPromoCode(promoCode, finalPrice);
+      finalPrice = discount.finalAmount;
+    }
+
+    // Récupérer les informations utilisateur
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Créer l'enregistrement de paiement en base sans ticketId
+    const payment = await this.prisma.payment.create({
+      data: {
+        userId,
+        amount: finalPrice,
+        originalAmount: basePrice,
+        discountAmount: basePrice - finalPrice,
+        currency,
+        provider,
+        paymentMethod,
+        status: PaymentStatus.PENDING,
+        customerName: customerName || `${user.firstName} ${user.lastName}`,
+        customerEmail: customerEmail || user.email,
+        customerPhone: customerPhone || user.phone,
+        promoCode,
+        customData: {
+          tripId,
+          pricingId,
+          seatNumber,
+          notes,
+          routeName: trip.route.name,
+          startTime: trip.startTime.toISOString(),
+          busNumber: trip.bus.busNumber,
+        },
+      },
+    });
+
+    try {
+      // Obtenir le fournisseur de paiement
+      const paymentProvider = this.providers.get(provider);
+      if (!paymentProvider) {
+        throw new BadRequestException(`Fournisseur ${provider} non disponible`);
+      }
+
+      // Créer le paiement externe
+      const externalPayment = await paymentProvider.createPayment({
+        amount: finalPrice,
+        description: `Ticket SunuBRT - ${trip.route.name} (${new Date(trip.startTime).toLocaleDateString()})`,
+        customerName: payment.customerName,
+        customerEmail: payment.customerEmail,
+        customerPhone: payment.customerPhone,
+        returnUrl,
+        cancelUrl,
+        customData: {
+          paymentId: payment.id,
+          userId,
+          tripId,
+          pricingId,
+          seatNumber,
+          notes,
+        },
+      });
+
+      // Mettre à jour le paiement avec les informations externes
+      const updatedPayment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          externalToken: externalPayment.token,
+          externalReference: externalPayment.paymentUrl,
+          externalData: externalPayment.rawResponse || {},
+        },
+      });
+
+      // Envoyer notification WebSocket
+      if (this.websocketsGateway) {
+        this.websocketsGateway.emitToUser(userId, 'payment:created', {
+          paymentId: payment.id,
+          paymentUrl: externalPayment.paymentUrl,
+          amount: finalPrice,
+        });
+      }
+
+      this.logger.log(
+        `Paiement de ticket créé: ${payment.id} pour le voyage ${tripId}`,
+      );
+
+      return {
+        paymentId: payment.id,
+        paymentUrl: externalPayment.paymentUrl,
+        paymentToken: externalPayment.token,
+        amount: finalPrice,
+        currency,
+        status: PaymentStatus.PENDING,
+        tripInfo: {
+          id: trip.id,
+          routeName: trip.route.name,
+          startTime: trip.startTime.toISOString(),
+          busNumber: trip.bus.busNumber,
+          availableSeats: trip.availableSeats - occupiedSeats,
+        },
+        pricingInfo: {
+          id: pricing.id,
+          name: pricing.name,
+          type: pricing.type,
+          originalPrice: basePrice,
+          finalPrice,
+          discountPercent: pricing.discountPercent,
+          validityDuration: pricing.validityDuration,
+          validityPeriodType: pricing.validityPeriodType,
+        },
+        reservedSeat: seatNumber,
+        reservationValidityMinutes: 15,
+        reservationExpiresAt: new Date(
+          Date.now() + 15 * 60 * 1000,
+        ).toISOString(),
+      };
+    } catch (error) {
+      // Supprimer le paiement en cas d'erreur
+      await this.prisma.payment.delete({ where: { id: payment.id } });
+      this.logger.error('Erreur création paiement de ticket:', error.message);
+      throw new InternalServerErrorException(
+        'Échec de création du paiement: ' + error.message,
+      );
+    }
+  }
+
   async createPayment(createPaymentDto: CreatePaymentDto, userId: string) {
     const {
       ticketId,
@@ -263,6 +502,13 @@ export class PaymentsService {
       promoCode,
       currency = 'XOF',
     } = createPaymentDto;
+
+    // Si aucun ticketId n'est fourni, retourner une erreur
+    if (!ticketId) {
+      throw new BadRequestException(
+        'ID du ticket requis pour cette méthode. Utilisez createTicketPayment pour créer un paiement de ticket.',
+      );
+    }
 
     // Vérifier que le ticket existe et appartient à l'utilisateur
     const ticket = await this.prisma.ticket.findFirst({
@@ -500,26 +746,12 @@ export class PaymentsService {
         throw new NotFoundException('Paiement non trouvé');
       }
 
-      // Déterminer les nouveaux statuts
+      // Déterminer le statut du paiement
       const paymentStatus = callbackResult.status;
-      let ticketStatus: TicketStatus;
+      let ticket = null;
 
-      switch (paymentStatus) {
-        case PaymentStatus.COMPLETED:
-          ticketStatus = TicketStatus.PAID;
-          break;
-        case PaymentStatus.CANCELLED:
-          ticketStatus = TicketStatus.CANCELLED;
-          break;
-        case PaymentStatus.FAILED:
-          ticketStatus = TicketStatus.CANCELLED;
-          break;
-        default:
-          ticketStatus = TicketStatus.PENDING;
-      }
-
-      // Mettre à jour le paiement et le ticket dans une transaction
-      const updatedPayment = await this.prisma.$transaction(async (tx) => {
+      // Mettre à jour le paiement et créer/mettre à jour le ticket dans une transaction
+      const result = await this.prisma.$transaction(async (tx) => {
         // Mettre à jour le paiement
         const updatedPayment = await tx.payment.update({
           where: { id: payment.id },
@@ -543,38 +775,163 @@ export class PaymentsService {
           },
         });
 
-        // Mettre à jour le ticket
-        await tx.ticket.update({
-          where: { id: payment.ticketId },
-          data: {
-            status: ticketStatus,
-          },
-        });
+        let createdTicket = null;
 
-        return updatedPayment;
+        // Si le paiement est réussi, créer automatiquement le ticket
+        if (paymentStatus === PaymentStatus.COMPLETED) {
+          // Récupérer les données du voyage et de la tarification depuis customData
+          const customData = payment.customData as any;
+          const tripId = customData?.tripId;
+          const pricingId = customData?.pricingId;
+          const seatNumber = customData?.seatNumber;
+          const notes = customData?.notes;
+
+          if (!tripId || !pricingId) {
+            throw new BadRequestException(
+              'Informations du voyage manquantes dans le paiement',
+            );
+          }
+
+          // Vérifier que le voyage existe
+          const trip = await tx.trip.findUnique({
+            where: { id: tripId },
+            include: {
+              route: {
+                include: {
+                  line: true,
+                },
+              },
+            },
+          });
+
+          if (!trip) {
+            throw new NotFoundException('Voyage non trouvé');
+          }
+
+          // Vérifier la tarification
+          const pricing = await tx.ticketPricing.findUnique({
+            where: { id: pricingId },
+          });
+
+          if (!pricing) {
+            throw new NotFoundException('Tarification non trouvée');
+          }
+
+          // Calculer la date de validité
+          const validUntil = new Date();
+          switch (pricing.validityPeriodType) {
+            case 'HOURS':
+              validUntil.setHours(
+                validUntil.getHours() + pricing.validityDuration,
+              );
+              break;
+            case 'DAYS':
+              validUntil.setDate(
+                validUntil.getDate() + pricing.validityDuration,
+              );
+              break;
+            case 'WEEKS':
+              validUntil.setDate(
+                validUntil.getDate() + pricing.validityDuration * 7,
+              );
+              break;
+            case 'MONTHS':
+              validUntil.setMonth(
+                validUntil.getMonth() + pricing.validityDuration,
+              );
+              break;
+            default:
+              validUntil.setDate(validUntil.getDate() + 1); // Par défaut 1 jour
+          }
+
+          // Générer un code QR unique pour le ticket
+          const qrCode = `SUNUBRT-${Date.now()}-${payment.id}`;
+
+          // Créer le ticket
+          createdTicket = await tx.ticket.create({
+            data: {
+              userId: payment.userId,
+              tripId,
+              pricingId,
+              seatNumber,
+              qrCode,
+              status: TicketStatus.PAID,
+              validUntil,
+              notes,
+              purchaseDate: new Date(),
+            },
+            include: {
+              trip: {
+                include: {
+                  route: {
+                    include: {
+                      line: true,
+                    },
+                  },
+                  bus: true,
+                },
+              },
+              pricing: true,
+            },
+          });
+
+          // Mettre à jour le paiement avec l'ID du ticket créé
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              ticketId: createdTicket.id,
+            },
+          });
+        }
+
+        return { updatedPayment, createdTicket };
       });
+
+      ticket = result.createdTicket;
 
       // Envoyer notifications WebSocket
       if (this.websocketsGateway) {
-        const eventName =
-          paymentStatus === PaymentStatus.COMPLETED
-            ? 'payment:completed'
-            : 'payment:failed';
+        if (paymentStatus === PaymentStatus.COMPLETED && ticket) {
+          this.websocketsGateway.emitToUser(
+            payment.userId,
+            'payment:completed',
+            {
+              paymentId: payment.id,
+              ticketId: ticket.id,
+              status: paymentStatus,
+              amount: payment.amount,
+            },
+          );
 
-        this.websocketsGateway.emitToUser(payment.userId, eventName, {
-          paymentId: payment.id,
-          ticketId: payment.ticketId,
-          status: paymentStatus,
-          amount: payment.amount,
-        });
+          this.websocketsGateway.emitToUser(payment.userId, 'ticket:created', {
+            ticketId: ticket.id,
+            tripInfo: {
+              routeName: ticket.trip.route.name,
+              startTime: ticket.trip.startTime,
+              busNumber: ticket.trip.bus.busNumber,
+            },
+          });
+        } else {
+          this.websocketsGateway.emitToUser(payment.userId, 'payment:failed', {
+            paymentId: payment.id,
+            status: paymentStatus,
+            amount: payment.amount,
+          });
+        }
       }
 
       this.logger.log(`Paiement ${payment.id} mis à jour: ${paymentStatus}`);
+      if (ticket) {
+        this.logger.log(
+          `Ticket ${ticket.id} créé automatiquement après paiement réussi`,
+        );
+      }
 
       return {
         message: 'Callback traité avec succès',
         paymentStatus,
-        ticketStatus,
+        ticketCreated: !!ticket,
+        ticketId: ticket?.id,
       };
     } catch (error) {
       this.logger.error('Erreur traitement callback PayDunya:', error.message);
