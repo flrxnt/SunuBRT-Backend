@@ -7,6 +7,253 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  password     String
+  firstName    String
+  lastName     String
+  phone        String?   @unique
+  role         Role      @default(USER)
+  isVerified   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  driverBus    Bus?      @relation("DriverToBus")
+  payments     Payment[]
+  adminRefunds Refund[]  @relation("AdminRefunds")
+  tickets      Ticket[]
+
+  @@map("users")
+}
+
+model Line {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  number        String          @unique
+  color         String?
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  buses         Bus[]
+  routes        Route[]
+  ticketPricing TicketPricing[]
+
+  @@map("lines")
+}
+
+model Bus {
+  id              String    @id @default(cuid())
+  licensePlate    String    @unique
+  capacity        Int
+  model           String?
+  year            Int?
+  driverId        String    @unique
+  isActive        Boolean   @default(true)
+  passengersCount Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  busNumber       String    @unique
+  lineId          Int?
+  driver          User      @relation("DriverToBus", fields: [driverId], references: [id])
+  line            Line?     @relation(fields: [lineId], references: [id])
+  currentPosition Position?
+  trips           Trip[]
+
+  @@map("buses")
+}
+
+model Position {
+  id        Int      @id @default(autoincrement())
+  busId     String   @unique
+  latitude  Float
+  longitude Float
+  altitude  Float?
+  speed     Float?
+  heading   Float?
+  timestamp DateTime @default(now())
+  bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+  @@map("positions")
+}
+
+model Route {
+  id            Int             @id @default(autoincrement())
+  name          String
+  startPointId  Int?
+  endPointId    Int?
+  distance      Float?
+  duration      Int?
+  description   String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lineId        Int?
+  points        RoutePoint[]    @relation("RoutePoints")
+  endPoint      RoutePoint?     @relation("RouteEndPoint", fields: [endPointId], references: [id])
+  line          Line?           @relation(fields: [lineId], references: [id])
+  startPoint    RoutePoint?     @relation("RouteStartPoint", fields: [startPointId], references: [id])
+  ticketPricing TicketPricing[]
+  trips         Trip[]
+
+  @@map("routes")
+}
+
+model RoutePoint {
+  id           Int      @id @default(autoincrement())
+  routeId      Int
+  latitude     Float
+  longitude    Float
+  elevation    Float?
+  seq          Int
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  route        Route    @relation("RoutePoints", fields: [routeId], references: [id], onDelete: Cascade)
+  routeAsEnd   Route[]  @relation("RouteEndPoint")
+  routeAsStart Route[]  @relation("RouteStartPoint")
+
+  @@unique([routeId, seq])
+  @@map("route_points")
+}
+
+model Trip {
+  id             Int        @id @default(autoincrement())
+  routeId        Int
+  busId          String
+  startTime      DateTime
+  endTime        DateTime?
+  price          Float
+  availableSeats Int
+  status         TripStatus @default(SCHEDULED)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  tickets        Ticket[]
+  bus            Bus        @relation(fields: [busId], references: [id])
+  route          Route      @relation(fields: [routeId], references: [id])
+
+  @@map("trips")
+}
+
+model Ticket {
+  id                 Int            @id @default(autoincrement())
+  userId             String
+  tripId             Int
+  seatNumber         String?
+  qrCode             String         @unique
+  status             TicketStatus   @default(PENDING)
+  purchaseDate       DateTime       @default(now())
+  validUntil         DateTime?
+  usedAt             DateTime?
+  cancellationReason String?
+  cancelledAt        DateTime?
+  notes              String?
+  passengers         Int            @default(1)
+  pricingId          Int?
+  validationLocation String?
+  validationNotes    String?
+  payment            Payment?
+  pricing            TicketPricing? @relation(fields: [pricingId], references: [id])
+  trip               Trip           @relation(fields: [tripId], references: [id])
+  user               User           @relation(fields: [userId], references: [id])
+
+  @@map("tickets")
+}
+
+model Payment {
+  id                   Int           @id @default(autoincrement())
+  ticketId             Int           @unique
+  userId               String
+  amount               Float
+  currency             String        @default("XOF")
+  status               PaymentStatus @default(PENDING)
+  paymentMethod        String?
+  paidAt               DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  cancellationReason   String?
+  cancelledAt          DateTime?
+  customData           Json          @default("{}")
+  customerEmail        String?
+  customerName         String?
+  customerPhone        String?
+  discountAmount       Float         @default(0)
+  externalData         Json          @default("{}")
+  externalReference    String?
+  externalToken        String?       @unique
+  fees                 Float         @default(0)
+  netAmount            Float?
+  notes                String?
+  originalAmount       Float?
+  promoCode            String?
+  provider             String        @default("PAYDUNYA")
+  transactionReference String?
+  ticket               Ticket        @relation(fields: [ticketId], references: [id])
+  user                 User          @relation(fields: [userId], references: [id])
+  refunds              Refund[]
+
+  @@map("payments")
+}
+
+model TicketPricing {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  type               String
+  price              Float
+  validityDuration   Int
+  validityPeriodType String
+  lineId             Int?
+  routeId            Int?
+  description        String?
+  discountPercent    Float     @default(0)
+  validFrom          DateTime?
+  validTo            DateTime?
+  isActive           Boolean   @default(true)
+  maxTickets         Int?
+  specialConditions  String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  line               Line?     @relation(fields: [lineId], references: [id])
+  route              Route?    @relation(fields: [routeId], references: [id])
+  tickets            Ticket[]
+
+  @@map("ticket_pricing")
+}
+
+model Refund {
+  id          Int       @id @default(autoincrement())
+  paymentId   Int
+  amount      Float
+  reason      String
+  adminNotes  String?
+  adminUserId String
+  status      String    @default("PENDING")
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  admin       User      @relation("AdminRefunds", fields: [adminUserId], references: [id])
+  payment     Payment   @relation(fields: [paymentId], references: [id])
+
+  @@map("refunds")
+}
+
+model PromoCode {
+  id           Int       @id @default(autoincrement())
+  code         String    @unique
+  name         String
+  description  String?
+  value        Float
+  isPercentage Boolean   @default(false)
+  maxUses      Int?
+  currentUses  Int       @default(0)
+  isActive     Boolean   @default(true)
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("promo_codes")
+}
+
 enum Role {
   USER
   DRIVER
@@ -16,18 +263,9 @@ enum Role {
 enum TicketStatus {
   PENDING
   PAID
-  ACTIVE
-  SUSPENDED
+  USED
   CANCELLED
   EXPIRED
-}
-
-enum TicketType {
-  SINGLE_USE
-  DAILY_PASS
-  WEEKLY_PASS
-  MONTHLY_PASS
-  ANNUAL_PASS
 }
 
 enum PaymentStatus {
@@ -42,318 +280,4 @@ enum TripStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
-}
-
-model User {
-  id          String    @id @default(uuid())
-  email       String    @unique
-  password    String
-  firstName   String
-  lastName    String
-  phone       String?   @unique
-  role        Role      @default(USER)
-  isVerified  Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  driverBus       Bus?      @relation("DriverToBus")
-  tickets         Ticket[]
-  payments        Payment[]
-  adminRefunds    Refund[]  @relation("AdminRefunds")
-  ticketValidations TicketUsage[] @relation("TicketValidator")
-
-  @@map("users")
-}
-
-model Line {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // ex: "Ligne 1", "Ligne A"
-  number      String   @unique // ex: "1", "A", "BRT1"
-  color       String?  // couleur de la ligne pour l'affichage
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  buses       Bus[]
-  routes      Route[]
-  ticketPricing TicketPricing[]
-
-  @@map("lines")
-}
-
-model Bus {
-  id               String        @id @default(cuid())
-  busNumber        String        @unique // numéro du bus (ex: "001", "A12")
-  licensePlate     String        @unique
-  capacity         Int
-  model            String?
-  year             Int?
-  lineId           Int?          // ligne à laquelle le bus est assigné
-  driverId         String        @unique
-  isActive         Boolean       @default(true)
-  passengersCount  Int           @default(0)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-
-  // Relations
-  line             Line?         @relation(fields: [lineId], references: [id])
-  driver           User          @relation("DriverToBus", fields: [driverId], references: [id])
-  currentPosition  Position?
-  trips            Trip[]
-  ticketUsages     TicketUsage[]
-
-  @@map("buses")
-}
-
-model Position {
-  id        Int      @id @default(autoincrement())
-  busId     String      @unique
-  latitude  Float
-  longitude Float
-  altitude  Float?
-  speed     Float?
-  heading   Float?
-  timestamp DateTime @default(now())
-
-  // Relations
-  bus       Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
-
-  @@map("positions")
-}
-
-model Route {
-  id            Int      @id @default(autoincrement())
-  name          String
-  lineId        Int?     // route appartient à une ligne
-  startPointId  Int?
-  endPointId    Int?
-  distance      Float?   // calculé automatiquement en km
-  duration      Int?     // calculé automatiquement en minutes
-  description   String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  line          Line?       @relation(fields: [lineId], references: [id])
-  startPoint    RoutePoint? @relation("RouteStartPoint", fields: [startPointId], references: [id])
-  endPoint      RoutePoint? @relation("RouteEndPoint", fields: [endPointId], references: [id])
-  trips            Trip[]
-  points        RoutePoint[] @relation("RoutePoints")
-  ticketPricing TicketPricing[]
-  ticketUsages  TicketUsage[]
-
-  @@map("routes")
-}
-
-model RoutePoint {
-  id        Int      @id @default(autoincrement())
-  routeId   Int
-  latitude  Float
-  longitude Float
-  elevation Float?
-  seq       Int      // ordre du point dans la route (commence à 1)
-  name      String?  // nom optionnel du point (ex: "Arrêt Central")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  route         Route  @relation("RoutePoints", fields: [routeId], references: [id], onDelete: Cascade)
-  routeAsStart  Route[] @relation("RouteStartPoint")
-  routeAsEnd    Route[] @relation("RouteEndPoint")
-
-  @@unique([routeId, seq])
-  @@map("route_points")
-}
-
-model Trip {
-  id            Int        @id @default(autoincrement())
-  routeId       Int
-  busId         String
-  startTime     DateTime
-  endTime       DateTime?
-  price         Float
-  availableSeats Int
-  status        TripStatus @default(SCHEDULED)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  // Relations
-  route         Route      @relation(fields: [routeId], references: [id])
-  bus           Bus        @relation(fields: [busId], references: [id])
-  tickets       Ticket[]
-  ticketUsages  TicketUsage[]
-
-  @@map("trips")
-}
-
-model Ticket {
-  id                  Int          @id @default(autoincrement())
-  userId              String
-  tripId              Int?         // Optionnel pour les abonnements
-  ticketType          TicketType   @default(SINGLE_USE)
-  seatNumber          String?
-  qrCode              String       @unique
-  status              TicketStatus @default(PENDING)
-  purchaseDate        DateTime     @default(now())
-  validFrom           DateTime     @default(now())
-  validUntil          DateTime?
-  maxUsages           Int?         // Nombre max d'utilisations (null = illimité)
-  currentUsages       Int          @default(0)
-  isReusable          Boolean      @default(false)
-
-  notes               String?
-  validationNotes     String?
-  validationLocation  String?
-  cancellationReason  String?
-  cancelledAt         DateTime?
-  pricingId           Int?
-
-  // Relations
-  user          User              @relation(fields: [userId], references: [id])
-  trip          Trip?             @relation(fields: [tripId], references: [id])
-  pricing       TicketPricing?    @relation(fields: [pricingId], references: [id])
-  payment       Payment?
-  usages        TicketUsage[]
-
-  @@map("tickets")
-}
-
-model TicketUsage {
-  id              Int      @id @default(autoincrement())
-  ticketId        Int
-  tripId          Int?
-  routeId         Int?
-  busId           String?
-  usedAt          DateTime @default(now())
-  validatorId     String?  // ID du conducteur/contrôleur qui a validé
-  latitude        Float?
-  longitude       Float?
-  notes           String?
-
-  // Relations
-  ticket          Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  trip            Trip?    @relation(fields: [tripId], references: [id])
-  route           Route?   @relation(fields: [routeId], references: [id])
-  bus             Bus?     @relation(fields: [busId], references: [id])
-  validator       User?    @relation("TicketValidator", fields: [validatorId], references: [id])
-
-  @@map("ticket_usages")
-}
-
-model Payment {
-  id                    Int           @id @default(autoincrement())
-  ticketId              Int?          @unique
-  userId                String
-  amount                Float
-  originalAmount        Float?
-  discountAmount        Float         @default(0)
-  currency              String        @default("XOF")
-  provider              String        @default("PAYDUNYA")
-  paymentMethod         String?
-  status                PaymentStatus @default(PENDING)
-
-  // Informations client
-  customerName          String?
-  customerEmail         String?
-  customerPhone         String?
-
-  // Références externes
-  externalToken         String?       @unique
-  externalReference     String?
-  transactionReference  String?
-  externalData          Json          @default("{}")
-
-  // Frais et montants nets
-  fees                  Float         @default(0)
-  netAmount             Float?
-
-  // Dates importantes
-  paidAt                DateTime?
-  cancelledAt           DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  // Métadonnées
-  notes                 String?
-  promoCode             String?
-  cancellationReason    String?
-  customData            Json          @default("{}")
-
-  // Relations
-  ticket                Ticket?       @relation(fields: [ticketId], references: [id])
-  user                  User          @relation(fields: [userId], references: [id])
-  refunds               Refund[]
-
-  @@map("payments")
-}
-
-model TicketPricing {
-  id                  Int                 @id @default(autoincrement())
-  name                String
-  type                String              // STANDARD, EXPRESS, PREMIUM, STUDENT, etc.
-  ticketType          TicketType          @default(SINGLE_USE)
-  price               Float
-  validityDuration    Int                 // Durée de validité
-  validityPeriodType  String              // HOURS, DAYS, WEEKS, MONTHS
-  maxUsages           Int?                // Nombre max d'utilisations pour ce tarif
-  isReusable          Boolean             @default(false)
-  lineId              Int?
-  routeId             Int?
-  description         String?
-  discountPercent     Float               @default(0)
-  validFrom           DateTime?
-  validTo             DateTime?
-  isActive            Boolean             @default(true)
-  maxTickets          Int?
-  specialConditions   String?
-  usageRules          Json                @default("{}")  // Règles spécifiques d'utilisation
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-
-  // Relations
-  line                Line?               @relation(fields: [lineId], references: [id])
-  route               Route?              @relation(fields: [routeId], references: [id])
-  tickets             Ticket[]
-
-  @@map("ticket_pricing")
-}
-
-model Refund {
-  id              Int       @id @default(autoincrement())
-  paymentId       Int
-  amount          Float
-  reason          String
-  adminNotes      String?
-  adminUserId     String
-  status          String    @default("PENDING") // PENDING, COMPLETED, FAILED, MANUAL
-  processedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  // Relations
-  payment         Payment   @relation(fields: [paymentId], references: [id])
-  admin           User      @relation("AdminRefunds", fields: [adminUserId], references: [id])
-
-  @@map("refunds")
-}
-
-model PromoCode {
-  id              Int       @id @default(autoincrement())
-  code            String    @unique
-  name            String
-  description     String?
-  value           Float     // Montant ou pourcentage
-  isPercentage    Boolean   @default(false)
-  maxUses         Int?
-  currentUses     Int       @default(0)
-  isActive        Boolean   @default(true)
-  expiresAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@map("promo_codes")
 }
