@@ -13,6 +13,7 @@ import { UsersService } from '../../users/users.service';
 
 export interface AuthUser {
   id: string;
+  sub: string; // Ajouter sub pour la compatibilité avec le code existant
   email: string;
   role: string;
   firstName?: string;
@@ -55,6 +56,7 @@ export class AuthGuard implements CanActivate {
       // Attach user info to request
       const user: AuthUser = {
         id: payload.sub,
+        sub: payload.sub, // Ajouter sub pour la compatibilité avec le code existant
         email: payload.email,
         role: payload.role,
       };
