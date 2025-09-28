@@ -38,10 +38,11 @@ export class PaydunyaInvoiceDto {
 
   @ApiPropertyOptional({
     description: 'URL de la facture',
-    example: 'https://app.paydunya.com/sandbox-checkout/checkout-invoice/b99ce65b63a4cbe87dc1b8bb07b094b5',
+    example:
+      'https://app.paydunya.com/sandbox-checkout/checkout-invoice/b99ce65b63a4cbe87dc1b8bb07b094b5',
   })
   @IsOptional()
-  @IsString({ message: 'L\'URL doit être une chaîne' })
+  @IsString({ message: "L'URL doit être une chaîne" })
   url?: string;
 
   @ApiPropertyOptional({
@@ -53,11 +54,11 @@ export class PaydunyaInvoiceDto {
   created_at?: string;
 
   @ApiPropertyOptional({
-    description: 'Date d\'expiration de la facture',
+    description: "Date d'expiration de la facture",
     example: '2024-01-16 10:30:00',
   })
   @IsOptional()
-  @IsString({ message: 'La date d\'expiration doit être une chaîne' })
+  @IsString({ message: "La date d'expiration doit être une chaîne" })
   expires_at?: string;
 
   @ApiPropertyOptional({
@@ -83,7 +84,7 @@ export class PaydunyaCustomerDto {
     example: 'amadou.diallo@example.com',
   })
   @IsOptional()
-  @IsString({ message: 'L\'email doit être une chaîne' })
+  @IsString({ message: "L'email doit être une chaîne" })
   email?: string;
 
   @ApiPropertyOptional({
@@ -154,7 +155,7 @@ export class PaydunyaCallbackDataDto {
     example: {
       paymentId: 123,
       ticketId: 456,
-      userId: 'clxxx-xxxx-xxxx-xxxx'
+      userId: 'clxxx-xxxx-xxxx-xxxx',
     },
   })
   @IsOptional()
@@ -227,25 +228,25 @@ export class PaydunyaCallbackDto {
 
 export class PaydunyaWebhookDto {
   @ApiProperty({
-    description: 'Type d\'événement PayDunya',
+    description: "Type d'événement PayDunya",
     example: 'invoice.payment.completed',
   })
-  @IsNotEmpty({ message: 'Le type d\'événement est requis' })
+  @IsNotEmpty({ message: "Le type d'événement est requis" })
   @IsString({ message: 'Le type doit être une chaîne' })
   event_type: string;
 
   @ApiProperty({
-    description: 'Données de l\'événement',
+    description: "Données de l'événement",
     type: PaydunyaCallbackDataDto,
   })
-  @IsNotEmpty({ message: 'Les données de l\'événement sont requises' })
+  @IsNotEmpty({ message: "Les données de l'événement sont requises" })
   @IsObject({ message: 'Les données doivent être un objet' })
   @ValidateNested()
   @Type(() => PaydunyaCallbackDataDto)
   data: PaydunyaCallbackDataDto;
 
   @ApiPropertyOptional({
-    description: 'Timestamp de l\'événement',
+    description: "Timestamp de l'événement",
     example: '2024-01-15T12:30:45Z',
   })
   @IsOptional()
@@ -253,10 +254,10 @@ export class PaydunyaWebhookDto {
   created_at?: string;
 
   @ApiPropertyOptional({
-    description: 'ID unique de l\'événement',
+    description: "ID unique de l'événement",
     example: 'evt_123456789abcdef',
   })
   @IsOptional()
-  @IsString({ message: 'L\'ID événement doit être une chaîne' })
+  @IsString({ message: "L'ID événement doit être une chaîne" })
   event_id?: string;
 }

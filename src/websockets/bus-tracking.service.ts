@@ -54,11 +54,17 @@ export class BusTrackingService {
    * Met à jour la position d'un bus et notifie les trackers
    */
   async updateBusPosition(positionUpdate: BusPositionUpdate) {
-    const { busId, latitude, longitude, altitude, speed, heading, timestamp } = positionUpdate;
+    const { busId, latitude, longitude, altitude, speed, heading, timestamp } =
+      positionUpdate;
 
     try {
       // Valider les coordonnées GPS
-      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      if (
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
         throw new Error('Invalid GPS coordinates');
       }
 
@@ -82,7 +88,8 @@ export class BusTrackingService {
           latitude,
           longitude,
         );
-        const timeElapsed = (Date.now() - (lastPos.timestamp?.getTime() || Date.now())) / 1000; // en secondes
+        const timeElapsed =
+          (Date.now() - (lastPos.timestamp?.getTime() || Date.now())) / 1000; // en secondes
         if (timeElapsed > 0) {
           calculatedSpeed = (distance / timeElapsed) * 3.6; // km/h
         }
@@ -135,7 +142,9 @@ export class BusTrackingService {
       // Détecter des anomalies (vitesse excessive, position aberrante, etc.)
       await this.detectAnomalies(busId, updatedPosition, bus);
 
-      this.logger.debug(`Position updated for bus ${busId}: ${latitude}, ${longitude}`);
+      this.logger.debug(
+        `Position updated for bus ${busId}: ${latitude}, ${longitude}`,
+      );
 
       return updatedPosition;
     } catch (error) {
@@ -155,7 +164,7 @@ export class BusTrackingService {
       tripId,
       lastStopId,
       nextStopId,
-      delayMinutes
+      delayMinutes,
     } = statusUpdate;
 
     try {
@@ -174,7 +183,9 @@ export class BusTrackingService {
         isActive,
         passengersCount,
         capacity: updatedBus.capacity,
-        occupancyRate: Math.round((passengersCount / updatedBus.capacity) * 100),
+        occupancyRate: Math.round(
+          (passengersCount / updatedBus.capacity) * 100,
+        ),
         tripId,
         lastStopId,
         nextStopId,
@@ -192,7 +203,9 @@ export class BusTrackingService {
         });
       }
 
-      this.logger.debug(`Status updated for bus ${busId}: ${passengersCount}/${updatedBus.capacity} passengers`);
+      this.logger.debug(
+        `Status updated for bus ${busId}: ${passengersCount}/${updatedBus.capacity} passengers`,
+      );
 
       return updatedBus;
     } catch (error) {
@@ -209,14 +222,14 @@ export class BusTrackingService {
       const buses = await this.prisma.bus.findMany({
         where: {
           lineId,
-          isActive: true
+          isActive: true,
         },
         include: { currentPosition: true },
       });
 
       const busPositions = buses
-        .filter(bus => bus.currentPosition)
-        .map(bus => ({
+        .filter((bus) => bus.currentPosition)
+        .map((bus) => ({
           busId: bus.id,
           busNumber: bus.busNumber,
           position: {
@@ -236,7 +249,10 @@ export class BusTrackingService {
 
       return busPositions;
     } catch (error) {
-      this.logger.error(`Error updating line positions ${lineId}:`, error.message);
+      this.logger.error(
+        `Error updating line positions ${lineId}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -257,7 +273,9 @@ export class BusTrackingService {
       if (!this.busAlerts.has(alert.busId || `line_${alert.lineId}`)) {
         this.busAlerts.set(alert.busId || `line_${alert.lineId}`, []);
       }
-      this.busAlerts.get(alert.busId || `line_${alert.lineId}`)!.push(fullAlert);
+      this.busAlerts
+        .get(alert.busId || `line_${alert.lineId}`)!
+        .push(fullAlert);
 
       // Émettre l'alerte
       if (alert.busId) {
@@ -266,7 +284,9 @@ export class BusTrackingService {
         this.websocketsGateway.emitTrafficUpdate(alert.lineId, fullAlert);
       }
 
-      this.logger.warn(`Traffic alert emitted: ${alert.type} - ${alert.message}`);
+      this.logger.warn(
+        `Traffic alert emitted: ${alert.type} - ${alert.message}`,
+      );
 
       return fullAlert;
     } catch (error) {
@@ -282,7 +302,7 @@ export class BusTrackingService {
     busId: string,
     startDate?: Date,
     endDate?: Date,
-    limit: number = 100
+    limit: number = 100,
   ) {
     try {
       // Note: Il faudrait un modèle PositionHistory pour stocker l'historique
@@ -293,7 +313,10 @@ export class BusTrackingService {
 
       return currentPosition ? [currentPosition] : [];
     } catch (error) {
-      this.logger.error(`Error getting position history for bus ${busId}:`, error.message);
+      this.logger.error(
+        `Error getting position history for bus ${busId}:`,
+        error.message,
+      );
       throw error;
     }
   }
@@ -345,7 +368,7 @@ export class BusTrackingService {
 
       // Nettoyer les alertes expirées
       this.busAlerts.forEach((alerts, key) => {
-        const validAlerts = alerts.filter(alert => {
+        const validAlerts = alerts.filter((alert) => {
           const alertTime = new Date(alert.timestamp || Date.now());
           return alertTime > twentyFourHoursAgo;
         });
@@ -389,8 +412,10 @@ export class BusTrackingService {
       // Bus immobile depuis longtemps (plus de 10 minutes sans mouvement)
       const lastPos = this.lastPositions.get(busId);
       if (lastPos && position.speed !== undefined && position.speed < 1) {
-        const timeSinceLastMove = Date.now() - (lastPos.timestamp?.getTime() || Date.now());
-        if (timeSinceLastMove > 10 * 60 * 1000) { // 10 minutes
+        const timeSinceLastMove =
+          Date.now() - (lastPos.timestamp?.getTime() || Date.now());
+        if (timeSinceLastMove > 10 * 60 * 1000) {
+          // 10 minutes
           alerts.push({
             lineId: bus.lineId!,
             busId,
@@ -410,30 +435,39 @@ export class BusTrackingService {
       for (const alert of alerts) {
         await this.emitTrafficAlert(alert);
       }
-
     } catch (error) {
-      this.logger.error(`Error detecting anomalies for bus ${busId}:`, error.message);
+      this.logger.error(
+        `Error detecting anomalies for bus ${busId}:`,
+        error.message,
+      );
     }
   }
 
   /**
    * Calcule la distance entre deux points GPS (formule de Haversine)
    */
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
     const R = 6371; // Rayon de la Terre en km
     const dLat = this.deg2rad(lat2 - lat1);
     const dLon = this.deg2rad(lon2 - lon1);
     const a =
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) *
+        Math.cos(this.deg2rad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance en km
     return distance * 1000; // Retourner en mètres
   }
 
   private deg2rad(deg: number): number {
-    return deg * (Math.PI/180);
+    return deg * (Math.PI / 180);
   }
 
   /**

@@ -88,7 +88,7 @@ export class TicketValidationResponseDto {
   };
 
   @ApiPropertyOptional({
-    description: 'Code d\'erreur si la validation échoue',
+    description: "Code d'erreur si la validation échoue",
     example: 'TICKET_EXPIRED',
   })
   @IsOptional()
@@ -96,7 +96,7 @@ export class TicketValidationResponseDto {
   errorCode?: string;
 
   @ApiPropertyOptional({
-    description: 'Détails additionnels sur l\'erreur',
+    description: "Détails additionnels sur l'erreur",
   })
   @IsOptional()
   errorDetails?: any;

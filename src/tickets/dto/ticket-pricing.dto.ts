@@ -142,10 +142,7 @@ export class CreateTicketPricingDto {
     example: '2024-12-31T23:59:59Z',
   })
   @IsOptional()
-  @IsDateString(
-    {},
-    { message: 'La date de fin doit être au format ISO 8601' },
-  )
+  @IsDateString({}, { message: 'La date de fin doit être au format ISO 8601' })
   validTo?: string;
 
   @ApiPropertyOptional({
@@ -256,10 +253,7 @@ export class UpdateTicketPricingDto {
     description: 'Date de fin de validité de cette tarification',
   })
   @IsOptional()
-  @IsDateString(
-    {},
-    { message: 'La date de fin doit être au format ISO 8601' },
-  )
+  @IsDateString({}, { message: 'La date de fin doit être au format ISO 8601' })
   validTo?: string;
 
   @ApiPropertyOptional({
@@ -337,10 +331,7 @@ export class ApplyDiscountDto {
     example: '2024-01-31T23:59:59Z',
   })
   @IsNotEmpty({ message: 'La date de fin est requise' })
-  @IsDateString(
-    {},
-    { message: 'La date de fin doit être au format ISO 8601' },
-  )
+  @IsDateString({}, { message: 'La date de fin doit être au format ISO 8601' })
   validTo: string;
 
   @ApiPropertyOptional({

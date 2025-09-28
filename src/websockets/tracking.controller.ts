@@ -19,7 +19,12 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
-import { BusTrackingService, BusPositionUpdate, BusStatusUpdate, TrafficAlert } from './bus-tracking.service';
+import {
+  BusTrackingService,
+  BusPositionUpdate,
+  BusStatusUpdate,
+  TrafficAlert,
+} from './bus-tracking.service';
 import { WebsocketsGateway } from './websockets.gateway';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -45,8 +50,9 @@ export class TrackingController {
   @Get('lines/:lineId/buses')
   @Public()
   @ApiOperation({
-    summary: 'Positions des bus d\'une ligne',
-    description: 'Récupère les positions actuelles de tous les bus actifs d\'une ligne',
+    summary: "Positions des bus d'une ligne",
+    description:
+      "Récupère les positions actuelles de tous les bus actifs d'une ligne",
   })
   @ApiParam({
     name: 'lineId',
@@ -70,12 +76,18 @@ export class TrackingController {
               longitude: { type: 'number', description: 'Longitude GPS' },
               speed: { type: 'number', description: 'Vitesse en km/h' },
               heading: { type: 'number', description: 'Direction en degrés' },
-              timestamp: { type: 'string', description: 'Timestamp de la position' },
+              timestamp: {
+                type: 'string',
+                description: 'Timestamp de la position',
+              },
             },
           },
           passengers: { type: 'number', description: 'Nombre de passagers' },
           capacity: { type: 'number', description: 'Capacité maximale' },
-          occupancyRate: { type: 'number', description: 'Taux d\'occupation en %' },
+          occupancyRate: {
+            type: 'number',
+            description: "Taux d'occupation en %",
+          },
         },
       },
     },
@@ -91,8 +103,8 @@ export class TrackingController {
   @Get('buses/:busId/position')
   @Public()
   @ApiOperation({
-    summary: 'Position actuelle d\'un bus',
-    description: 'Récupère la position GPS actuelle d\'un bus spécifique',
+    summary: "Position actuelle d'un bus",
+    description: "Récupère la position GPS actuelle d'un bus spécifique",
   })
   @ApiParam({
     name: 'busId',
@@ -115,7 +127,10 @@ export class TrackingController {
             altitude: { type: 'number', description: 'Altitude en mètres' },
             speed: { type: 'number', description: 'Vitesse en km/h' },
             heading: { type: 'number', description: 'Direction en degrés' },
-            timestamp: { type: 'string', description: 'Timestamp de la position' },
+            timestamp: {
+              type: 'string',
+              description: 'Timestamp de la position',
+            },
           },
         },
         status: {
@@ -124,7 +139,10 @@ export class TrackingController {
             isActive: { type: 'boolean', description: 'Bus actif' },
             passengers: { type: 'number', description: 'Nombre de passagers' },
             capacity: { type: 'number', description: 'Capacité maximale' },
-            occupancyRate: { type: 'number', description: 'Taux d\'occupation en %' },
+            occupancyRate: {
+              type: 'number',
+              description: "Taux d'occupation en %",
+            },
           },
         },
       },
@@ -142,8 +160,8 @@ export class TrackingController {
   @Get('buses/:busId/history')
   @Public()
   @ApiOperation({
-    summary: 'Historique des positions d\'un bus',
-    description: 'Récupère l\'historique des positions GPS d\'un bus',
+    summary: "Historique des positions d'un bus",
+    description: "Récupère l'historique des positions GPS d'un bus",
   })
   @ApiParam({
     name: 'busId',
@@ -206,12 +224,21 @@ export class TrackingController {
       properties: {
         activeBuses: { type: 'number', description: 'Nombre de bus actifs' },
         totalBuses: { type: 'number', description: 'Nombre total de bus' },
-        busesWithPosition: { type: 'number', description: 'Bus avec position GPS' },
-        coverageRate: { type: 'number', description: 'Taux de couverture GPS en %' },
+        busesWithPosition: {
+          type: 'number',
+          description: 'Bus avec position GPS',
+        },
+        coverageRate: {
+          type: 'number',
+          description: 'Taux de couverture GPS en %',
+        },
         websocket: {
           type: 'object',
           properties: {
-            totalConnectedUsers: { type: 'number', description: 'Utilisateurs connectés' },
+            totalConnectedUsers: {
+              type: 'number',
+              description: 'Utilisateurs connectés',
+            },
             trackedBuses: { type: 'number', description: 'Bus suivis' },
             trackedLines: { type: 'number', description: 'Lignes suivies' },
           },
@@ -258,20 +285,26 @@ export class TrackingController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'ID de l\'alerte' },
+          id: { type: 'string', description: "ID de l'alerte" },
           lineId: { type: 'number', description: 'ID de la ligne' },
           busId: { type: 'string', description: 'ID du bus (optionnel)' },
           type: {
             type: 'string',
-            enum: ['CONGESTION', 'INCIDENT', 'BREAKDOWN', 'DELAY', 'ROUTE_CHANGE'],
-            description: 'Type d\'alerte',
+            enum: [
+              'CONGESTION',
+              'INCIDENT',
+              'BREAKDOWN',
+              'DELAY',
+              'ROUTE_CHANGE',
+            ],
+            description: "Type d'alerte",
           },
           severity: {
             type: 'string',
             enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
             description: 'Niveau de sévérité',
           },
-          message: { type: 'string', description: 'Message d\'alerte' },
+          message: { type: 'string', description: "Message d'alerte" },
           location: {
             type: 'object',
             properties: {
@@ -280,7 +313,7 @@ export class TrackingController {
               description: { type: 'string' },
             },
           },
-          timestamp: { type: 'string', description: 'Date de l\'alerte' },
+          timestamp: { type: 'string', description: "Date de l'alerte" },
         },
       },
     },
@@ -294,7 +327,7 @@ export class TrackingController {
 
     // Filtrer par sévérité si spécifiée
     if (severity) {
-      return alerts.filter(alert => alert.severity === severity);
+      return alerts.filter((alert) => alert.severity === severity);
     }
 
     return alerts;
@@ -307,8 +340,8 @@ export class TrackingController {
   @Post('buses/:busId/position')
   @Roles(Role.DRIVER, Role.ADMIN)
   @ApiOperation({
-    summary: 'Mettre à jour la position d\'un bus',
-    description: 'Met à jour la position GPS d\'un bus (Conducteurs et Admins)',
+    summary: "Mettre à jour la position d'un bus",
+    description: "Met à jour la position GPS d'un bus (Conducteurs et Admins)",
   })
   @ApiParam({
     name: 'busId',
@@ -393,8 +426,9 @@ export class TrackingController {
   @Post('buses/:busId/status')
   @Roles(Role.DRIVER, Role.ADMIN)
   @ApiOperation({
-    summary: 'Mettre à jour le statut d\'un bus',
-    description: 'Met à jour le statut et les informations d\'un bus (Conducteurs et Admins)',
+    summary: "Mettre à jour le statut d'un bus",
+    description:
+      "Met à jour le statut et les informations d'un bus (Conducteurs et Admins)",
   })
   @ApiParam({
     name: 'busId',
@@ -464,10 +498,11 @@ export class TrackingController {
   @Roles(Role.ADMIN)
   @ApiOperation({
     summary: 'Créer une alerte de trafic',
-    description: 'Crée une nouvelle alerte de trafic ou incident (Admin uniquement)',
+    description:
+      'Crée une nouvelle alerte de trafic ou incident (Admin uniquement)',
   })
   @ApiBody({
-    description: 'Données de l\'alerte',
+    description: "Données de l'alerte",
     schema: {
       type: 'object',
       required: ['lineId', 'type', 'severity', 'message'],
@@ -484,8 +519,14 @@ export class TrackingController {
         },
         type: {
           type: 'string',
-          enum: ['CONGESTION', 'INCIDENT', 'BREAKDOWN', 'DELAY', 'ROUTE_CHANGE'],
-          description: 'Type d\'alerte',
+          enum: [
+            'CONGESTION',
+            'INCIDENT',
+            'BREAKDOWN',
+            'DELAY',
+            'ROUTE_CHANGE',
+          ],
+          description: "Type d'alerte",
           example: 'INCIDENT',
         },
         severity: {
@@ -496,7 +537,7 @@ export class TrackingController {
         },
         message: {
           type: 'string',
-          description: 'Message d\'alerte',
+          description: "Message d'alerte",
           example: 'Accident sur la route, circulation perturbée',
         },
         location: {
@@ -533,7 +574,8 @@ export class TrackingController {
   @Roles(Role.ADMIN)
   @ApiOperation({
     summary: 'Statistiques WebSocket détaillées',
-    description: 'Récupère les statistiques détaillées des connexions WebSocket (Admin)',
+    description:
+      'Récupère les statistiques détaillées des connexions WebSocket (Admin)',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -541,11 +583,23 @@ export class TrackingController {
     schema: {
       type: 'object',
       properties: {
-        totalConnectedUsers: { type: 'number', description: 'Total utilisateurs connectés' },
+        totalConnectedUsers: {
+          type: 'number',
+          description: 'Total utilisateurs connectés',
+        },
         trackedBuses: { type: 'number', description: 'Nombre de bus suivis' },
-        trackedLines: { type: 'number', description: 'Nombre de lignes suivies' },
-        totalBusTrackers: { type: 'number', description: 'Total de suivis de bus' },
-        totalLineTrackers: { type: 'number', description: 'Total de suivis de ligne' },
+        trackedLines: {
+          type: 'number',
+          description: 'Nombre de lignes suivies',
+        },
+        totalBusTrackers: {
+          type: 'number',
+          description: 'Total de suivis de bus',
+        },
+        totalLineTrackers: {
+          type: 'number',
+          description: 'Total de suivis de ligne',
+        },
         mostTrackedBuses: {
           type: 'array',
           items: {
@@ -585,7 +639,8 @@ export class TrackingController {
   @Roles(Role.ADMIN)
   @ApiOperation({
     summary: 'Actualiser toutes les positions',
-    description: 'Force l\'actualisation des positions de tous les bus actifs (Admin)',
+    description:
+      "Force l'actualisation des positions de tous les bus actifs (Admin)",
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -603,7 +658,7 @@ export class TrackingController {
   @Roles(Role.ADMIN)
   @ApiOperation({
     summary: 'État de santé du système de tracking',
-    description: 'Vérifie l\'état de santé du système de tracking (Admin)',
+    description: "Vérifie l'état de santé du système de tracking (Admin)",
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -615,19 +670,40 @@ export class TrackingController {
         checks: {
           type: 'object',
           properties: {
-            database: { type: 'boolean', description: 'Base de données accessible' },
-            websocket: { type: 'boolean', description: 'WebSocket fonctionnel' },
-            busPositions: { type: 'boolean', description: 'Positions GPS récentes' },
-            alerts: { type: 'boolean', description: 'Système d\'alertes actif' },
+            database: {
+              type: 'boolean',
+              description: 'Base de données accessible',
+            },
+            websocket: {
+              type: 'boolean',
+              description: 'WebSocket fonctionnel',
+            },
+            busPositions: {
+              type: 'boolean',
+              description: 'Positions GPS récentes',
+            },
+            alerts: { type: 'boolean', description: "Système d'alertes actif" },
           },
         },
         metrics: {
           type: 'object',
           properties: {
-            uptime: { type: 'number', description: 'Temps de fonctionnement en ms' },
-            memoryUsage: { type: 'number', description: 'Utilisation mémoire en MB' },
-            lastPositionUpdate: { type: 'string', description: 'Dernière mise à jour GPS' },
-            activeConnections: { type: 'number', description: 'Connexions WebSocket actives' },
+            uptime: {
+              type: 'number',
+              description: 'Temps de fonctionnement en ms',
+            },
+            memoryUsage: {
+              type: 'number',
+              description: 'Utilisation mémoire en MB',
+            },
+            lastPositionUpdate: {
+              type: 'string',
+              description: 'Dernière mise à jour GPS',
+            },
+            activeConnections: {
+              type: 'number',
+              description: 'Connexions WebSocket actives',
+            },
           },
         },
         timestamp: { type: 'string', description: 'Timestamp de vérification' },
