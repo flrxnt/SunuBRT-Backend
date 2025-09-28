@@ -12,6 +12,7 @@ import { LinesModule } from './lines/lines.module';
 import { TripsModule } from './trips/trips.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { WebsocketsModule } from './websockets/websockets.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TicketsModule } from './tickets/tickets.module';
     TripsModule,
     PaymentsModule,
     TicketsModule,
+    WebsocketsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

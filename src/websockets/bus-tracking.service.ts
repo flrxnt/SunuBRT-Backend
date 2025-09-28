@@ -37,6 +37,7 @@ export interface TrafficAlert {
   };
   estimatedDuration?: number; // en minutes
   affectedRoutes?: number[];
+  timestamp?: number; // timestamp de création de l'alerte
 }
 
 @Injectable()
@@ -266,7 +267,7 @@ export class BusTrackingService {
       const fullAlert = {
         ...alert,
         id: alertId,
-        timestamp: new Date(),
+        timestamp: Date.now(),
       };
 
       // Stocker l'alerte

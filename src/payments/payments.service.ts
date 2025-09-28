@@ -308,7 +308,7 @@ export class PaymentsService {
 
     if (promoCode) {
       const discount = await this.applyPromoCode(promoCode, finalAmount);
-      discountAmount = discount.amount;
+      discountAmount = discount.discountAmount;
       finalAmount = discount.finalAmount;
     }
 
@@ -532,7 +532,10 @@ export class PaymentsService {
               paymentStatus === PaymentStatus.COMPLETED ? new Date() : null,
             transactionReference: callbackResult.transactionRef,
             externalData: {
-              ...payment.externalData,
+              ...(typeof payment.externalData === 'object' &&
+              payment.externalData !== null
+                ? payment.externalData
+                : {}),
               callback: callbackResult.rawData,
             },
             fees: callbackResult.fees || 0,
@@ -822,10 +825,16 @@ export class PaymentsService {
       where: {
         code: promoCode,
         isActive: true,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-        OR: [
-          { maxUses: null },
-          { currentUses: { lt: this.prisma.promoCode.fields.maxUses } },
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          },
+          {
+            OR: [
+              { maxUses: null },
+              { currentUses: { lt: this.prisma.promoCode.fields.maxUses } },
+            ],
+          },
         ],
       },
     });
