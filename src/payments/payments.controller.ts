@@ -12,6 +12,7 @@ import {
   ParseIntPipe,
   HttpCode,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
