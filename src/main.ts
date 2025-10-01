@@ -3,9 +3,21 @@ import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Configure middleware pour les callbacks PayDunya
+  // PayDunya envoie les données au format application/x-www-form-urlencoded
+  app.use(
+    '/api/v1/payments/paydunya/callback',
+    bodyParser.urlencoded({ extended: true }),
+  );
+  app.use(
+    '/api/v1/payments/paydunya/callback',
+    bodyParser.raw({ type: 'application/x-www-form-urlencoded' }),
+  );
 
   // Enable CORS
   app.enableCors({

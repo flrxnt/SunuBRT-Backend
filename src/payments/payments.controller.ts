@@ -369,8 +369,33 @@ export class PaymentsController {
     status: HttpStatus.NOT_FOUND,
     description: 'Paiement non trouvé',
   })
-  async handlePaydunyaCallback(@Body() callbackDto: PaydunyaCallbackDto) {
-    return this.paymentsService.handlePaydunyaCallback(callbackDto);
+  async handlePaydunyaCallback(@Body() rawBody: any) {
+    try {
+      // PayDunya envoie les données au format application/x-www-form-urlencoded
+      // avec une clé "data" contenant les informations JSON
+      let callbackData;
+
+      if (typeof rawBody === 'string') {
+        // Si c'est une chaîne, parser les données URL-encoded
+        const params = new URLSearchParams(rawBody);
+        const dataString = params.get('data');
+        if (!dataString) {
+          throw new BadRequestException('Données de callback manquantes');
+        }
+        callbackData = { data: JSON.parse(dataString) };
+      } else if (rawBody.data) {
+        // Si les données sont déjà parsées
+        callbackData = rawBody;
+      } else {
+        throw new BadRequestException('Format de callback invalide');
+      }
+
+      return this.paymentsService.handlePaydunyaCallback(callbackData);
+    } catch (error) {
+      throw new BadRequestException(
+        `Erreur lors du traitement du callback: ${error.message}`,
+      );
+    }
   }
 
   @Post('paydunya/webhook')
@@ -866,5 +891,32 @@ export class PaymentsController {
 
     // Implémentation de simulation
     throw new Error('Fonctionnalité non implémentée');
+  }
+
+  @Get('test/callback-config')
+  @Public()
+  @ApiOperation({
+    summary: 'Tester la configuration du callback',
+    description:
+      'Affiche les informations de configuration du callback PayDunya',
+  })
+  async testCallbackConfig() {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const callbackUrl = `${baseUrl}/api/v1/payments/paydunya/callback`;
+
+    return {
+      message: 'Configuration du callback PayDunya',
+      callbackUrl,
+      baseUrl,
+      isLocalhost: callbackUrl.includes('localhost'),
+      warning: callbackUrl.includes('localhost')
+        ? 'ATTENTION: URL localhost détectée - PayDunya ne peut pas envoyer de callbacks à localhost'
+        : null,
+      recommendations: [
+        'Utilisez ngrok ou un service similaire pour exposer votre localhost',
+        'Ou déployez sur un serveur accessible publiquement',
+        "Configurez BASE_URL dans vos variables d'environnement",
+      ],
+    };
   }
 }

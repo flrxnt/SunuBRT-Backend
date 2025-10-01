@@ -152,9 +152,20 @@ class PaydunyaProvider implements PaymentProviderInterface {
       .update(this.config.masterKey)
       .digest('hex');
 
+    console.log('=== VÉRIFICATION HASH PAYDUNYA ===');
+    console.log('Master Key:', this.config.masterKey.substring(0, 10) + '...');
+    console.log('Hash attendu:', expectedHash);
+    console.log('Hash reçu:', callbackData.data.hash);
+    console.log('Hash valide:', callbackData.data.hash === expectedHash);
+
     if (callbackData.data.hash !== expectedHash) {
+      console.error('ERREUR: Hash de sécurité invalide');
+      console.error('Hash attendu:', expectedHash);
+      console.error('Hash reçu:', callbackData.data.hash);
       throw new BadRequestException('Hash de sécurité invalide');
     }
+
+    console.log('Hash validé avec succès');
 
     return {
       status: this.mapPaydunyaStatus(callbackData.data.status),
@@ -747,16 +758,27 @@ export class PaymentsService {
   async handlePaydunyaCallback(callbackDto: PaydunyaCallbackDto) {
     const { data } = callbackDto;
 
+    // Logging pour debugging
+    console.log('=== CALLBACK PAYDUNYA REÇU ===');
+    console.log('Token:', data.invoice?.token);
+    console.log('Statut:', data.status);
+    console.log('Hash reçu:', data.hash);
+    console.log('Données complètes:', JSON.stringify(data, null, 2));
+
     try {
       const provider = this.providers.get(PaymentProvider.PAYDUNYA);
       if (!provider) {
+        console.error('Fournisseur PayDunya non disponible');
         throw new BadRequestException('Fournisseur PayDunya non disponible');
       }
 
       // Traiter le callback via le fournisseur
+      console.log('Traitement du callback via le fournisseur...');
       const callbackResult = await provider.handleCallback(callbackDto);
+      console.log('Résultat du callback:', callbackResult);
 
       // Trouver le paiement par token
+      console.log('Recherche du paiement avec token:', data.invoice.token);
       const payment = await this.prisma.payment.findFirst({
         where: {
           externalToken: data.invoice.token,
@@ -775,8 +797,16 @@ export class PaymentsService {
       });
 
       if (!payment) {
+        console.error('Paiement non trouvé pour le token:', data.invoice.token);
         throw new NotFoundException('Paiement non trouvé');
       }
+
+      console.log(
+        'Paiement trouvé:',
+        payment.id,
+        'Statut actuel:',
+        payment.status,
+      );
 
       // Déterminer le statut du paiement
       const paymentStatus = callbackResult.status;
