@@ -47,7 +47,7 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
     private readonly websocketsGateway: WebsocketsGateway,
-  ) { }
+  ) {}
 
   // ===============================
   // GESTION DES TICKETS
@@ -727,10 +727,10 @@ export class TicketsService {
           maxUsages: ticket.maxUsages,
           tripInfo: ticket.trip
             ? {
-              routeName: ticket.trip.route.name,
-              startTime: ticket.trip.startTime.toISOString(),
-              busNumber: ticket.trip.bus.busNumber,
-            }
+                routeName: ticket.trip.route.name,
+                startTime: ticket.trip.startTime.toISOString(),
+                busNumber: ticket.trip.bus.busNumber,
+              }
             : undefined,
           validFrom: ticket.validFrom?.toISOString(),
           validUntil: ticket.validUntil?.toISOString(),
@@ -902,10 +902,10 @@ export class TicketsService {
         isReusable: ticket.isReusable,
         tripInfo: ticketUsage.trip
           ? {
-            routeName: ticketUsage.trip.route.name,
-            startTime: ticketUsage.trip.startTime.toISOString(),
-            busNumber: ticketUsage.trip.bus.busNumber,
-          }
+              routeName: ticketUsage.trip.route.name,
+              startTime: ticketUsage.trip.startTime.toISOString(),
+              busNumber: ticketUsage.trip.bus.busNumber,
+            }
           : undefined,
       });
     }
@@ -930,16 +930,16 @@ export class TicketsService {
         maxUsages: ticket.maxUsages,
         tripInfo: ticketUsage.trip
           ? {
-            routeName: ticketUsage.trip.route.name,
-            startTime: ticketUsage.trip.startTime.toISOString(),
-            busNumber: ticketUsage.trip.bus.busNumber,
-          }
+              routeName: ticketUsage.trip.route.name,
+              startTime: ticketUsage.trip.startTime.toISOString(),
+              busNumber: ticketUsage.trip.bus.busNumber,
+            }
           : ticket.trip
             ? {
-              routeName: ticket.trip.route.name,
-              startTime: ticket.trip.startTime.toISOString(),
-              busNumber: ticket.trip.bus.busNumber,
-            }
+                routeName: ticket.trip.route.name,
+                startTime: ticket.trip.startTime.toISOString(),
+                busNumber: ticket.trip.bus.busNumber,
+              }
             : undefined,
         validFrom: ticket.validFrom?.toISOString(),
         validUntil: ticket.validUntil?.toISOString(),
@@ -1433,13 +1433,13 @@ export class TicketsService {
         },
         tripInfo: ticket.trip
           ? {
-            routeName: ticket.trip.route.name,
-            lineName: ticket.trip.route.line?.name,
-            startTime: ticket.trip.startTime,
-            endTime: ticket.trip.endTime,
-            busNumber: ticket.trip.bus.busNumber,
-            price: ticket.trip.price,
-          }
+              routeName: ticket.trip.route.name,
+              lineName: ticket.trip.route.line?.name,
+              startTime: ticket.trip.startTime,
+              endTime: ticket.trip.endTime,
+              busNumber: ticket.trip.bus.busNumber,
+              price: ticket.trip.price,
+            }
           : null,
         paymentInfo: {
           status: ticket.payment?.status,
@@ -1465,11 +1465,11 @@ export class TicketsService {
       },
       ...(startDate && endDate
         ? {
-          purchaseDate: {
-            gte: new Date(startDate),
-            lte: new Date(endDate),
-          },
-        }
+            purchaseDate: {
+              gte: new Date(startDate),
+              lte: new Date(endDate),
+            },
+          }
         : {}),
     };
 
@@ -1518,11 +1518,11 @@ export class TicketsService {
           ticket: whereClause,
           ...(startDate && endDate
             ? {
-              usedAt: {
-                gte: new Date(startDate),
-                lte: new Date(endDate),
-              },
-            }
+                usedAt: {
+                  gte: new Date(startDate),
+                  lte: new Date(endDate),
+                },
+              }
             : {}),
         },
       }),
@@ -1677,9 +1677,9 @@ export class TicketsService {
             usageCount: usage._count.id,
             user: ticket?.user
               ? {
-                name: `${ticket.user.firstName} ${ticket.user.lastName}`,
-                email: ticket.user.email,
-              }
+                  name: `${ticket.user.firstName} ${ticket.user.lastName}`,
+                  email: ticket.user.email,
+                }
               : null,
             ticketType: ticket?.ticketType,
           };
@@ -1743,16 +1743,16 @@ export class TicketsService {
             : null,
         trip: usage.trip
           ? {
-            routeName: usage.trip.route.name,
-            lineName: usage.trip.route.line?.name,
-            startTime: usage.trip.startTime,
-            busNumber: usage.trip.bus.busNumber,
-          }
+              routeName: usage.trip.route.name,
+              lineName: usage.trip.route.line?.name,
+              startTime: usage.trip.startTime,
+              busNumber: usage.trip.bus.busNumber,
+            }
           : null,
         validator: usage.validator
           ? {
-            name: `${usage.validator.firstName} ${usage.validator.lastName}`,
-          }
+              name: `${usage.validator.firstName} ${usage.validator.lastName}`,
+            }
           : null,
       })),
       summary: {

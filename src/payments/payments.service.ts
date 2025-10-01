@@ -152,11 +152,11 @@ class PaydunyaProvider implements PaymentProviderInterface {
       .update(this.config.masterKey)
       .digest('hex');
 
-    console.log('=== VÉRIFICATION HASH PAYDUNYA ===');
-    console.log('Master Key:', this.config.masterKey.substring(0, 10) + '...');
-    console.log('Hash attendu:', expectedHash);
-    console.log('Hash reçu:', callbackData.data.hash);
-    console.log('Hash valide:', callbackData.data.hash === expectedHash);
+    // console.log('=== VÉRIFICATION HASH PAYDUNYA ===');
+    // console.log('Master Key:', this.config.masterKey.substring(0, 10) + '...');
+    // console.log('Hash attendu:', expectedHash);
+    // console.log('Hash reçu:', callbackData.data.hash);
+    // console.log('Hash valide:', callbackData.data.hash === expectedHash);
 
     if (callbackData.data.hash !== expectedHash) {
       console.error('ERREUR: Hash de sécurité invalide');
@@ -759,11 +759,11 @@ export class PaymentsService {
     const { data } = callbackDto;
 
     // Logging pour debugging
-    console.log('=== CALLBACK PAYDUNYA REÇU ===');
-    console.log('Token:', data.invoice?.token);
-    console.log('Statut:', data.status);
-    console.log('Hash reçu:', data.hash);
-    console.log('Données complètes:', JSON.stringify(data, null, 2));
+    // console.log('=== CALLBACK PAYDUNYA REÇU ===');
+    // console.log('Token:', data.invoice?.token);
+    // console.log('Statut:', data.status);
+    // console.log('Hash reçu:', data.hash);
+    // console.log('Données complètes:', JSON.stringify(data, null, 2));
 
     try {
       const provider = this.providers.get(PaymentProvider.PAYDUNYA);
@@ -778,7 +778,7 @@ export class PaymentsService {
       console.log('Résultat du callback:', callbackResult);
 
       // Trouver le paiement par token
-      console.log('Recherche du paiement avec token:', data.invoice.token);
+      // console.log('Recherche du paiement avec token:', data.invoice.token);
       const payment = await this.prisma.payment.findFirst({
         where: {
           externalToken: data.invoice.token,
