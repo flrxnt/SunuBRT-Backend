@@ -20,7 +20,7 @@ export class TripsService {
    */
   async create(
     createTripDto: CreateTripDto,
-    _user: CurrentUserData,
+    user: CurrentUserData,
   ): Promise<Trip> {
     const { routeId, busId, startTime, endTime, ...tripData } = createTripDto;
 
@@ -48,6 +48,13 @@ export class TripsService {
 
     if (!bus) {
       throw new NotFoundException(`Bus avec l'ID ${busId} non trouvé`);
+    }
+
+    // Si c'est un conducteur, il ne peut créer un trajet que pour son propre bus
+    if (user.role === 'DRIVER' && bus.driverId !== user.sub) {
+      throw new BadRequestException(
+        'Un conducteur ne peut créer un trajet que pour son propre bus',
+      );
     }
 
     if (!bus.isActive) {
@@ -128,6 +135,8 @@ export class TripsService {
           busId,
           startTime: startTimeDate,
           endTime: calculatedEndTime,
+          // Forcer price à 0 si non fourni (pas de prix associé au voyage)
+          price: typeof (tripData as any).price === 'number' ? (tripData as any).price : 0,
         },
         include: {
           route: {

@@ -47,15 +47,13 @@ export class CreateTripDto {
   endTime?: string;
 
   @ApiProperty({
-    description: 'Prix du ticket pour ce trajet en FCFA',
-    example: 500,
-    minimum: 100,
-    maximum: 5000,
+    description: 'Deprecated: Le prix ne doit pas être associé au trajet. Utiliser tickets/pricing.',
+    example: 0,
+    required: false,
   })
   @IsNumber()
-  @Min(100)
-  @Max(5000)
-  price: number;
+  @IsOptional()
+  price?: number;
 
   @ApiProperty({
     description: 'Nombre de places disponibles pour ce trajet',

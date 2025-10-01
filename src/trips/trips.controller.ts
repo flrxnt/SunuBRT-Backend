@@ -48,12 +48,11 @@ export class TripsController {
   constructor(private readonly tripsService: TripsService) {}
 
   @Post()
-  @Roles(Role.ADMIN)
-  @Permissions(Permission.CREATE_TRIP)
+  @Roles(Role.DRIVER, Role.ADMIN)
   @ApiOperation({
-    summary: 'Créer un nouveau trajet (Admin uniquement)',
+    summary: 'Créer un nouveau trajet',
     description:
-      'Permet aux administrateurs de créer un nouveau trajet avec horaires et tarification',
+      'Permet aux conducteurs et administrateurs de créer un nouveau trajet. Aucun prix associé directement au voyage, la tarification est gérée par tickets/pricing.',
   })
   @ApiResponse({
     status: 201,

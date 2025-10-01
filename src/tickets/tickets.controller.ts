@@ -9,9 +9,7 @@ import {
   UseGuards,
   Query,
   Req,
-  BadRequestException,
   ParseIntPipe,
-  HttpCode,
   HttpStatus,
   DefaultValuePipe,
 } from '@nestjs/common';
@@ -29,7 +27,7 @@ import {
   CreateTicketDto,
   CreateSubscriptionTicketDto,
 } from './dto/create-ticket.dto';
-import { UpdateTicketDto } from './dto/update-ticket.dto';
+// import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   ValidateTicketDto,
   TicketValidationResponseDto,
@@ -45,8 +43,8 @@ import {
   UpdateTicketPricingDto,
   BulkUpdatePricingDto,
   ApplyDiscountDto,
+  TicketPricingType,
 } from './dto/ticket-pricing.dto';
-import { TicketPricingType } from './dto/ticket-pricing.dto';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -75,7 +73,8 @@ export class TicketsController {
   // ENDPOINTS TICKETS
   // ===============================
 
-  @Get('pricing/:tripId')
+  // Note: path updated to avoid conflict with pricing by id
+  @Get('pricing/available/:tripId')
   @ApiOperation({
     summary: 'Obtenir les tarifications disponibles pour un voyage',
     description:
@@ -199,11 +198,10 @@ export class TicketsController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
-    const statusArray = status
-      ? Array.isArray(status)
-        ? status
-        : [status]
-      : undefined;
+    let statusArray: string[] | undefined = undefined;
+    if (status) {
+      statusArray = Array.isArray(status) ? status : [status];
+    }
 
     return this.ticketsService.findUserTickets(user.sub, {
       status: statusArray as TicketStatus[],
@@ -513,15 +511,19 @@ export class TicketsController {
   })
   async findAllPricing(
     @Query('type') type?: TicketPricingType,
-    @Query('lineId') lineId?: number,
-    @Query('routeId') routeId?: number,
-    @Query('isActive') isActive?: boolean,
+    @Query('lineId') lineId?: string,
+    @Query('routeId') routeId?: string,
+    @Query('isActive') isActive?: string,
   ) {
+    const parsedIsActive =
+      typeof isActive === 'string'
+        ? isActive.toLowerCase() === 'true'
+        : undefined;
     return this.ticketsService.findAllPricing({
       type,
-      lineId: lineId ? parseInt(lineId.toString()) : undefined,
-      routeId: routeId ? parseInt(routeId.toString()) : undefined,
-      isActive: isActive === true,
+      lineId: lineId ? parseInt(lineId, 10) : undefined,
+      routeId: routeId ? parseInt(routeId, 10) : undefined,
+      isActive: parsedIsActive,
     });
   }
 
@@ -545,8 +547,7 @@ export class TicketsController {
     description: 'Tarification non trouvée',
   })
   async findOnePricing(@Param('id', ParseIntPipe) id: number) {
-    // Cette méthode devra être implémentée dans le service
-    throw new Error('Fonctionnalité non implémentée');
+    return this.ticketsService.findOnePricing(id);
   }
 
   @Patch('pricing/:id')
