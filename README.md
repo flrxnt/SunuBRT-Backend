@@ -315,7 +315,6 @@ La liste exhaustive est disponible dans:
 - Bonnes pratiques: principe du moindre privilège, défense en profondeur
 
 **⚠️ IMPORTANT:** Consultez `docs/SECURITY_CRITICAL_WARNINGS.md` avant la production.  
-**⚠️ IMPORTANT:** Consultez `docs/SECURITY_CRITICAL_WARNINGS.md` avant la production.  
 Réf: `docs/SECURITY_ARCHITECTURE.md`
 
 ---
