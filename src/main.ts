@@ -28,7 +28,7 @@ async function bootstrap() {
   // Security: Apply rate limiting to prevent brute force attacks
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100, // limit each IP to 100 requests per windowMs
     message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
     standardHeaders: true,
     legacyHeaders: false,
