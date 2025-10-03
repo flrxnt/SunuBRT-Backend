@@ -116,7 +116,8 @@ sunubrt-backend/
 
 - Sécurité
   - Guards, rôles, permissions, interceptors de log d’accès
-  - Réf: `docs/SECURITY_ARCHITECTURE.md`
+  - **⚠️ IMPORTANT:** Consultez `docs/SECURITY_CRITICAL_WARNINGS.md` avant la production.  
+Réf: `docs/SECURITY_ARCHITECTURE.md`
 
 ---
 
@@ -304,12 +305,17 @@ La liste exhaustive est disponible dans:
 
 ## Sécurité
 
+
+**🛡️ Correctifs critiques récents:** Attaque temporelle corrigée, rate limiting activé, headers de sécurité configurés, logs sécurisés.
+
 - AuthGuard (JWT), RolesGuard (RBAC), PermissionsGuard (permissions granulaires)
 - Décorateurs `@Public()`, `@Roles()`, `@CurrentUser()`, permissions dédiées
 - AccessLogInterceptor (log d’accès/audit)
 - Validation d’inputs (class-validator), sanitation
 - Bonnes pratiques: principe du moindre privilège, défense en profondeur
 
+**⚠️ IMPORTANT:** Consultez `docs/SECURITY_CRITICAL_WARNINGS.md` avant la production.  
+**⚠️ IMPORTANT:** Consultez `docs/SECURITY_CRITICAL_WARNINGS.md` avant la production.  
 Réf: `docs/SECURITY_ARCHITECTURE.md`
 
 ---
