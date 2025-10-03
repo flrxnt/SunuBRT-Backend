@@ -4,6 +4,8 @@
 
 Ce document décrit l'architecture de sécurité implémentée dans le backend SunuBRT, incluant les guards, interceptors, décorateurs et stratégies d'autorisation.
 
+> ⚠️ **IMPORTANT**: Avant de déployer en production, consultez [SECURITY_CRITICAL_WARNINGS.md](./SECURITY_CRITICAL_WARNINGS.md) pour les avertissements de sécurité critiques et les correctifs récents.
+
 ## 🔐 Composants de Sécurité
 
 ### 1. Guards (Gardes)
@@ -252,22 +254,40 @@ export class BusesController {}
 
 ## 🚨 Points d'Attention Sécurité
 
-### 1. Token JWT
-- Stocker le secret JWT de manière sécurisée
-- Implémenter la rotation des tokens pour production
-- Considérer l'ajout d'un refresh token
+> **Note**: Ces points ont été récemment corrigés. Voir [SECURITY_CRITICAL_WARNINGS.md](./SECURITY_CRITICAL_WARNINGS.md) pour les détails.
 
-### 2. Rate Limiting
-- À implémenter pour prévenir les attaques par force brute
-- Particulièrement important sur les endpoints de position
+### 1. Token JWT ✅ PARTIELLEMENT CORRIGÉ
+- ⚠️ **CRITIQUE**: Les secrets JWT par défaut doivent être changés en production
+- ✅ Rate limiting implémenté pour les endpoints d'authentification
+- ✅ Refresh token implémenté
 
-### 3. Validation d'Input
-- Utilisation de `class-validator` pour tous les DTOs
-- Sanitization des données entrantes
+### 2. Rate Limiting ✅ CORRIGÉ
+- ✅ Rate limiting global implémenté (100 req/15min)
+- ✅ Rate limiting strict sur les endpoints d'authentification (5 req/15min)
+- ✅ Protection contre les attaques par force brute
 
-### 4. HTTPS
+### 3. Validation d'Input ✅ IMPLÉMENTÉ
+- ✅ Utilisation de `class-validator` pour tous les DTOs
+- ✅ Sanitization des données entrantes via ValidationPipe
+- ✅ Whitelist activée pour bloquer les propriétés non déclarées
+
+### 4. HTTPS ⚠️ À CONFIGURER EN PRODUCTION
 - Obligatoire en production
 - Toutes les communications doivent être chiffrées
+
+### 5. Security Headers ✅ CORRIGÉ
+- ✅ Helmet configuré avec Content Security Policy
+- ✅ Protection contre XSS, clickjacking, MIME-sniffing
+- ✅ Headers de sécurité appliqués globalement
+
+### 6. Timing Attacks ✅ CORRIGÉ
+- ✅ Utilisation de `crypto.timingSafeEqual()` pour la validation de hash PayDunya
+- ✅ Protection contre les attaques temporelles sur la validation des paiements
+
+### 7. Data Exposure ✅ CORRIGÉ
+- ✅ Suppression des console.log/error exposant des données sensibles
+- ✅ Utilisation du Logger NestJS pour tous les logs
+- ✅ Pas de fuite de hash ou tokens dans les logs
 
 ## 🔄 Évolutions Futures
 

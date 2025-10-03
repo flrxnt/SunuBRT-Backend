@@ -4,9 +4,52 @@ import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as bodyParser from 'body-parser';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Security: Apply Helmet to set secure HTTP headers
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+
+  // Security: Apply rate limiting to prevent brute force attacks
+  const limiter = rateLimit({
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100, // limit each IP to 100 requests per windowMs
+    message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Apply rate limiting to all routes
+  app.use(limiter);
+
+  // Stricter rate limiting for authentication endpoints
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message:
+      'Trop de tentatives de connexion depuis cette IP, veuillez réessayer dans 15 minutes.',
+    skipSuccessfulRequests: true,
+  });
+
+  app.use('/api/v1/auth/login', authLimiter);
+  app.use('/api/v1/auth/register', authLimiter);
+  app.use('/api/v1/auth/forgot-password', authLimiter);
+  app.use('/api/v1/auth/reset-password', authLimiter);
 
   // Configure middleware pour les callbacks PayDunya
   // PayDunya envoie les données au format application/x-www-form-urlencoded
