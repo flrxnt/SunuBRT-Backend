@@ -107,10 +107,10 @@ describe('BusesController', () => {
 
       mockBusesService.update.mockResolvedValue(updatedBus);
 
-      const result = await controller.update('bus-1', updateBusDto);
+      const result = await controller.update('bus-1', updateBusDto, mockUser as any);
 
       expect(result).toEqual(updatedBus);
-      expect(service.update).toHaveBeenCalledWith('bus-1', updateBusDto);
+      expect(service.update).toHaveBeenCalledWith('bus-1', updateBusDto, mockUser);
     });
   });
 
@@ -118,9 +118,9 @@ describe('BusesController', () => {
     it('should remove a bus', async () => {
       mockBusesService.remove.mockResolvedValue(undefined);
 
-      await controller.remove('bus-1');
+      await controller.remove('bus-1', mockUser as any);
 
-      expect(service.remove).toHaveBeenCalledWith('bus-1');
+      expect(service.remove).toHaveBeenCalledWith('bus-1', mockUser);
     });
   });
 });

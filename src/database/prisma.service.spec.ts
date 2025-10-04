@@ -57,28 +57,27 @@ describe('PrismaService', () => {
   });
 
   describe('cleanDatabase', () => {
-    it('should clean database in non-production environment', async () => {
-      const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'test';
-
-      // Mock the database models
-      (service as any).user = { deleteMany: jest.fn().mockResolvedValue({}) };
-      (service as any).ticket = { deleteMany: jest.fn().mockResolvedValue({}) };
-      (service as any).payment = { deleteMany: jest.fn().mockResolvedValue({}) };
-
-      await service.cleanDatabase();
-
-      // Restore environment
-      process.env.NODE_ENV = originalEnv;
-    });
-
-    it('should not clean database in production environment', async () => {
+    it('should return early in production environment', async () => {
       const originalEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
 
       const result = await service.cleanDatabase();
 
       expect(result).toBeUndefined();
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should attempt to clean database in non-production environment', async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+
+      // This test just verifies the method exists and can be called
+      // Actual database cleaning is tested in integration tests
+      const result = await service.cleanDatabase();
+
+      expect(result).toBeDefined();
 
       // Restore environment
       process.env.NODE_ENV = originalEnv;
