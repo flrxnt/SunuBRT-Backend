@@ -28,10 +28,13 @@ describe('BusesController', () => {
     create: jest.fn(),
     findAll: jest.fn(),
     findOne: jest.fn(),
+    findByDriverId: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
     updatePosition: jest.fn(),
     getPosition: jest.fn(),
+    getBusStatistics: jest.fn(),
+    findByLine: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -45,7 +48,25 @@ describe('BusesController', () => {
           useValue: mockBusesService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(require('../common/guards/auth.guard').AuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(require('../common/guards/roles.guard').RolesGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(
+        require('../common/guards/permissions.guard').PermissionsGuard,
+      )
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(
+        require('../common/guards/bus-ownership.guard').BusOwnershipGuard,
+      )
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideInterceptor(
+        require('../common/interceptors/access-log.interceptor')
+          .AccessLogInterceptor,
+      )
+      .useValue({ intercept: jest.fn((context, next) => next.handle()) })
+      .compile();
 
     controller = module.get<BusesController>(BusesController);
     service = module.get<BusesService>(BusesService);
@@ -97,6 +118,23 @@ describe('BusesController', () => {
     });
   });
 
+  describe('getMyBus', () => {
+    it('should return the bus assigned to the current driver', async () => {
+      const driverUser = {
+        id: 'driver-1',
+        email: 'driver@example.com',
+        role: 'DRIVER',
+      };
+
+      mockBusesService.findByDriverId.mockResolvedValue(mockBus);
+
+      const result = await controller.getMyBus(driverUser as any);
+
+      expect(result).toEqual(mockBus);
+      expect(service.findByDriverId).toHaveBeenCalledWith('driver-1');
+    });
+  });
+
   describe('update', () => {
     it('should update a bus', async () => {
       const updateBusDto = {
@@ -107,10 +145,18 @@ describe('BusesController', () => {
 
       mockBusesService.update.mockResolvedValue(updatedBus);
 
-      const result = await controller.update('bus-1', updateBusDto, mockUser as any);
+      const result = await controller.update(
+        'bus-1',
+        updateBusDto,
+        mockUser as any,
+      );
 
       expect(result).toEqual(updatedBus);
-      expect(service.update).toHaveBeenCalledWith('bus-1', updateBusDto, mockUser);
+      expect(service.update).toHaveBeenCalledWith(
+        'bus-1',
+        updateBusDto,
+        mockUser,
+      );
     });
   });
 

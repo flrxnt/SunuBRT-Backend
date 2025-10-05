@@ -39,6 +39,7 @@ describe('BusesService', () => {
     lineId: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
+    trips: [],
   };
 
   const mockPrismaService = {
@@ -54,6 +55,9 @@ describe('BusesService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+    },
+    position: {
+      deleteMany: jest.fn(),
     },
   };
 
@@ -226,7 +230,9 @@ describe('BusesService', () => {
       mockPrismaService.bus.findUnique.mockResolvedValue(mockBus);
       mockPrismaService.bus.update.mockResolvedValue(updatedBus);
 
-      const result = await service.update('bus-1', updateBusDto);
+      const result = await service.update('bus-1', updateBusDto, {
+        id: 'admin-1',
+      });
 
       expect(result.capacity).toBe(60);
       expect(mockPrismaService.bus.update).toHaveBeenCalled();
@@ -235,7 +241,29 @@ describe('BusesService', () => {
     it('should throw NotFoundException if bus not found', async () => {
       mockPrismaService.bus.findUnique.mockResolvedValue(null);
 
-      await expect(service.update('999', updateBusDto)).rejects.toThrow(
+      await expect(
+        service.update('999', updateBusDto, { id: 'admin-1' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findByDriverId', () => {
+    it('should return bus assigned to driver', async () => {
+      mockPrismaService.bus.findUnique.mockResolvedValue(mockBus);
+
+      const result = await service.findByDriverId('driver-1');
+
+      expect(result).toEqual(mockBus);
+      expect(mockPrismaService.bus.findUnique).toHaveBeenCalledWith({
+        where: { driverId: 'driver-1' },
+        include: expect.any(Object),
+      });
+    });
+
+    it('should throw NotFoundException if no bus assigned to driver', async () => {
+      mockPrismaService.bus.findUnique.mockResolvedValue(null);
+
+      await expect(service.findByDriverId('driver-2')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -246,7 +274,7 @@ describe('BusesService', () => {
       mockPrismaService.bus.findUnique.mockResolvedValue(mockBus);
       mockPrismaService.bus.delete.mockResolvedValue(mockBus);
 
-      await service.remove('bus-1');
+      await service.remove('bus-1', { id: 'admin-1' });
 
       expect(mockPrismaService.bus.delete).toHaveBeenCalledWith({
         where: { id: 'bus-1' },
@@ -256,7 +284,9 @@ describe('BusesService', () => {
     it('should throw NotFoundException if bus not found', async () => {
       mockPrismaService.bus.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove('999')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('999', { id: 'admin-1' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

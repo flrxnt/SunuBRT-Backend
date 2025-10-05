@@ -211,6 +211,56 @@ export class BusesService {
     });
   }
 
+  async findByDriverId(driverId: string) {
+    const bus = await this.prisma.bus.findUnique({
+      where: { driverId },
+      include: {
+        line: {
+          select: {
+            id: true,
+            name: true,
+            number: true,
+            color: true,
+            description: true,
+          },
+        },
+        driver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+        currentPosition: true,
+        trips: {
+          where: {
+            status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+          },
+          include: {
+            route: {
+              select: {
+                id: true,
+                name: true,
+                startPoint: true,
+                endPoint: true,
+              },
+            },
+          },
+          orderBy: { startTime: 'asc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!bus) {
+      throw new NotFoundException('Aucun bus assigné à ce conducteur');
+    }
+
+    return bus;
+  }
+
   async update(id: string, updateBusDto: UpdateBusDto, user: any) {
     const existingBus = await this.prisma.bus.findUnique({
       where: { id },

@@ -119,6 +119,28 @@ export class BusesController {
     return this.busesService.findAll(query);
   }
 
+  @Get('my-bus')
+  @Roles(Role.DRIVER)
+  @RequiresBusRead()
+  @ApiOperation({
+    summary: 'Récupérer le bus assigné au conducteur connecté',
+    description:
+      'Permet au conducteur connecté de récupérer les informations de son bus assigné',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bus du conducteur récupéré avec succès',
+    type: Bus,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Aucun bus assigné à ce conducteur',
+  })
+  @ApiResponse({ status: 403, description: 'Accès interdit' })
+  async getMyBus(@CurrentUser() user: CurrentUserData) {
+    return this.busesService.findByDriverId(user.id);
+  }
+
   @Get('statistics')
   @Roles(Role.ADMIN)
   @RequiresAdminAccess()
