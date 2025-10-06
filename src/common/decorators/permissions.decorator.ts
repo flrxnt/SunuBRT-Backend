@@ -36,6 +36,12 @@ export enum Permission {
   UPDATE_ROUTE = 'update:route',
   DELETE_ROUTE = 'delete:route',
 
+  // Stop permissions
+  CREATE_STOP = 'create:stop',
+  READ_STOP = 'read:stop',
+  UPDATE_STOP = 'update:stop',
+  DELETE_STOP = 'delete:stop',
+
   // Trip permissions
   CREATE_TRIP = 'create:trip',
   READ_TRIP = 'read:trip',
@@ -71,6 +77,7 @@ export const RolePermissions = {
     Permission.READ_BUS,
     Permission.READ_LINE,
     Permission.READ_ROUTE,
+    Permission.READ_STOP,
     Permission.READ_TRIP,
     Permission.CREATE_TICKET,
     Permission.READ_OWN_TICKET,
@@ -84,6 +91,7 @@ export const RolePermissions = {
     Permission.READ_BUS,
     Permission.READ_LINE,
     Permission.READ_ROUTE,
+    Permission.READ_STOP,
     Permission.READ_TRIP,
     Permission.CREATE_TICKET,
     Permission.READ_OWN_TICKET,
@@ -167,6 +175,15 @@ export const RequiresRouteManagement = () =>
   );
 
 export const RequiresRouteRead = () => Permissions(Permission.READ_ROUTE);
+
+export const RequiresStopManagement = () =>
+  Permissions(
+    Permission.CREATE_STOP,
+    Permission.UPDATE_STOP,
+    Permission.DELETE_STOP,
+  );
+
+export const RequiresStopRead = () => Permissions(Permission.READ_STOP);
 
 export const RequiresTripManagement = () =>
   Permissions(

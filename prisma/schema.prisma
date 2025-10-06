@@ -41,6 +41,26 @@ model User {
   @@map("users")
 }
 
+model Stop {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String?
+  latitude    Float
+  longitude   Float
+  zone        String?
+  services    Json?    // Array of services like ["wifi", "accessible", "shelter", "bench", "lighting"]
+  photo       String?  // URL to photo
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  routePoints RoutePoint[] // Route points that correspond to this stop
+  lines       Line[]       @relation("StopLines") // Lines that pass through this stop
+
+  @@map("stops")
+}
+
 model Line {
   id            Int             @id @default(autoincrement())
   name          String          @unique
@@ -53,6 +73,7 @@ model Line {
   buses         Bus[]
   routes        Route[]
   ticketPricing TicketPricing[]
+  stops         Stop[]          @relation("StopLines") // Lines that pass through stops
 
   @@map("lines")
 }
@@ -138,6 +159,7 @@ model Route {
 model RoutePoint {
   id           Int      @id @default(autoincrement())
   routeId      Int
+  stopId       Int?     // Reference to physical stop
   latitude     Float
   longitude    Float
   elevation    Float?
@@ -148,6 +170,7 @@ model RoutePoint {
   route        Route    @relation("RoutePoints", fields: [routeId], references: [id], onDelete: Cascade)
   routeAsEnd   Route[]  @relation("RouteEndPoint")
   routeAsStart Route[]  @relation("RouteStartPoint")
+  stop         Stop?    @relation(fields: [stopId], references: [id])
 
   @@unique([routeId, seq])
   @@map("route_points")

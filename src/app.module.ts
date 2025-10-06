@@ -12,6 +12,7 @@ import { LinesModule } from './lines/lines.module';
 import { TripsModule } from './trips/trips.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { StopsModule } from './stops/stops.module';
 import { WebsocketsModule } from './websockets/websockets.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { WebsocketsModule } from './websockets/websockets.module';
     TripsModule,
     PaymentsModule,
     TicketsModule,
+    StopsModule,
     WebsocketsModule,
   ],
   controllers: [AppController],
